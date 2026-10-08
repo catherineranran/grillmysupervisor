@@ -1,9 +1,9 @@
-# Where the Light Rests · ratemysupervisor.online
+# Where the Light Rests · grillmysupervisor.online
 
 A walkable, first-person 3D gallery of sandstone and glass, built with Three.js in a single `index.html`.
 Kind words get pinned on the posters above the sofas; complaints go in the one and only bin.
 
-Live at **https://ratemysupervisor.online** (GitHub Pages, deployed from the `main` branch).
+Live at **https://grillmysupervisor.online** (GitHub Pages, deployed from the `main` branch).
 
 ## Files
 
@@ -20,7 +20,7 @@ Live at **https://ratemysupervisor.online** (GitHub Pages, deployed from the `ma
 
 ## DNS for the custom domain
 
-At the registrar where `ratemysupervisor.online` is managed:
+At Namecheap (Domain List → Manage → Advanced DNS), where `grillmysupervisor.online` is registered:
 
 | Type | Host | Value |
 | --- | --- | --- |
