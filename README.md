@@ -9,9 +9,14 @@ Live at **https://grillmysupervisor.online** (GitHub Pages, deployed from the `m
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | The whole site: scene, controls, posters, bin and the notes layer |
+| `index.html` | The whole site: scene, controls, posters, bin, the outdoors and the notes layer |
+| `assets/` | Textures (photo banner, logos, tulip) and `alpaca.pack`, the encrypted alpaca model shared with vibe-shepherding |
 | `CNAME` | Tells GitHub Pages which custom domain serves the site |
 | `.nojekyll` | Skips the Jekyll build so the page is served exactly as written |
+
+## Outdoors
+
+The glass door by the first sofa opens onto the terrace (and the grill). Steps lead down through the planter wall to a meadow where the alpacas from [vibe-shepherding](https://ranranli.net/vibe-shepherding/) graze. The wooden gate at the far side of the meadow opens that site in a new tab.
 
 ## Controls
 
@@ -75,3 +80,8 @@ The `anon` key is meant to be public; the row-level-security policies above are 
 ### Moderation
 
 Open the `notes` table in the Supabase dashboard. Tick `hidden` on a row to take it off the wall or out of the bin without deleting it, or delete the row outright. Visitors cannot edit or delete notes from the site.
+
+## Credits
+
+- Alpaca: "Alpaca Animal" by Nyilonelycompany (CGTrader Royalty Free License, bought by the site owner). As in vibe-shepherding, the model ships only as an AES-GCM encrypted package (`assets/alpaca.pack`) that the page decrypts in memory, so the model files themselves are not redistributed.
+- Scene, furniture, trees, grass and the grill are generated in code with [three.js](https://threejs.org/) r128.

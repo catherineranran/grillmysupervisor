@@ -43,6 +43,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--sky);color:var(-
 #intro .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
 #intro h1{margin:0;font-size:clamp(30px,7vw,42px);line-height:1.02;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
 #intro p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-soft);max-width:36ch}
+#intro p.aside{font-size:13px;max-width:44ch}
 #intro dl{margin:4px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-family:var(--mono);font-size:12px}
 #intro dt{color:var(--ink);font-weight:500}
 #intro dd{margin:0;color:var(--ink-soft)}
@@ -82,7 +83,14 @@ body.locked #cross{opacity:1}
 #prompt.on{opacity:1}
 #prompt b{color:var(--ink);font-weight:500}
 
-#board{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:16px;background:rgba(36,32,28,.3)}
+#board,#gate{position:fixed;inset:0;z-index:6;display:grid;place-items:center;padding:16px;background:rgba(36,32,28,.3)}
+#gate .card{position:relative;max-width:480px;width:100%;display:grid;gap:12px;padding:22px 22px 20px}
+#gate .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+#gate h2{margin:0;font-size:clamp(24px,5vw,30px);line-height:1.05;font-weight:700;letter-spacing:-.02em;text-wrap:balance;padding-right:40px}
+#gate p{margin:0;font-size:14px;line-height:1.5;color:var(--ink-soft)}
+#gate .close{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;border:1px solid var(--glass-line);background:rgba(255,255,255,.55);color:var(--ink);font:500 18px/1 var(--display);cursor:pointer;display:grid;place-items:center}
+#gate .go{justify-self:start;font:600 15px var(--display);padding:12px 20px;border-radius:999px;background:var(--ink);color:#f7f4ef;text-decoration:none}
+#gate .go:focus-visible,#gate .close:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
 #board .card{
   position:relative;max-width:520px;width:100%;max-height:calc(100% - 32px);overflow:auto;
   display:grid;gap:12px;padding:22px 22px 18px;
@@ -141,6 +149,16 @@ body.locked #cross{opacity:1}
 <div id="hint" class="panel" aria-live="polite"></div>
 <div id="prompt" class="panel" aria-live="polite"></div>
 
+<div id="gate" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+    <button class="close" id="gateClose" type="button" aria-label="Back to the meadow">×</button>
+    <div class="eyebrow">The gate</div>
+    <h2 id="gateTitle">The Ili grassland lies past this gate</h2>
+    <p>It's Ranran's other world, <em>Herding Alpacas on the Ili Grassland</em>: an endless valley, a stream, spruce slopes and a flock that follows you. The alpacas grazing here wandered over from it. It lives on its own page, so crossing opens it in a new tab.</p>
+    <a id="gateGo" class="go" href="https://ranranli.net/vibe-shepherding/" target="_blank" rel="noopener">Cross over to the grassland →</a>
+  </div>
+</div>
+
 <div id="board" hidden>
   <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
     <button class="close" id="boardClose" type="button" aria-label="Back to the hall">×</button>
@@ -166,11 +184,13 @@ body.locked #cross{opacity:1}
     <h1>Where the Light Rests</h1>
     <p>Walk the length of a sandstone-and-glass gallery while the sun lays mullion shadows across the oak floor.</p>
     <dl id="keys"></dl>
+    <p class="aside">The glass door by the first sofa opens onto the terrace; steps lead down to the meadow, the alpacas and the gate to the Ili grassland.</p>
     <button id="enter" type="button"><span class="dot"></span>Step inside</button>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script>
 (function(){
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -298,8 +318,9 @@ const grilleTex = makeTex(64,256,(g,w,h)=>{
 });
 
 const fieldTex = makeTex(512,512,(g,w,h)=>{
-  g.fillStyle='#b9ad88'; g.fillRect(0,0,w,h);
-  for(let k=0;k<5000;k++){ g.fillStyle=`hsla(${44+rr(-10,22)},${22+rr(0,18)}%,${58+rr(-14,10)}%,.35)`; g.fillRect(rand()*w, rand()*h, rr(1,4), rr(1,3)); }
+  g.fillStyle='#7da452'; g.fillRect(0,0,w,h);
+  for(let k=0;k<6000;k++){ g.fillStyle=`hsla(${88+rr(-14,22)},${34+rr(0,22)}%,${40+rr(-12,14)}%,.4)`; g.fillRect(rand()*w, rand()*h, rr(1,5), rr(1,3)); }
+  for(let k=0;k<40;k++){ g.fillStyle=`hsla(${80+rr(-10,30)},30%,${36+rr(-6,8)}%,.18)`; g.beginPath(); g.ellipse(rand()*w, rand()*h, rr(20,90), rr(10,40), rand()*3, 0, Math.PI*2); g.fill(); }
 });
 
 const leafTex = makeTex(256,256,(g,w,h)=>{
@@ -415,10 +436,15 @@ const world = new THREE.Group(); scene.add(world);
 woodTex.repeat.set(4/1.6, L/1.6);
 const floor = mesh(new THREE.PlaneGeometry(4, L), M.floor, 0, 0, ZC, false, true);
 floor.rotation.x = -Math.PI/2; world.add(floor);
-// floor grille along glass
-grilleTex.repeat.set(1, L/0.25);
-const grille = mesh(new THREE.PlaneGeometry(0.28, L), M.grille, XG+0.22, 0.004, ZC, false, true);
-grille.rotation.x = -Math.PI/2; world.add(grille);
+// the glass door bay near the start (opening between DOOR.z1 and DOOR.z0), and the steps down from the terrace
+const DOOR = {z0: -0.3, z1: -1.5, h: 2.3, angle: 0, target: 0};
+const STAIR = {z0: -2.3, z1: -4.3, top: -8.0, bottom: -10.4};
+// floor grille along glass, split around the door
+for(const [za, zb] of [[Z0, DOOR.z0], [DOOR.z1, Z1]]){
+  const len = za - zb, gt = grilleTex.clone(); gt.needsUpdate = true; gt.repeat.set(1, len/0.25);
+  const gr = mesh(new THREE.PlaneGeometry(0.28, len), new THREE.MeshStandardMaterial({map:gt, roughness:0.5, metalness:0.4}), XG+0.22, 0.004, (za+zb)/2, false, true);
+  gr.rotation.x = -Math.PI/2; world.add(gr);
+}
 
 // ceiling slab (overhangs outside)
 world.add(mesh(new THREE.BoxGeometry(5.0, 0.4, L+0.4), M.ceiling, -0.5, H+0.2, ZC));
@@ -440,10 +466,27 @@ world.add(mesh(new THREE.BoxGeometry(1.2, 2.4, 0.05), M.door, 0.6, 1.2, Z1+0.02,
 world.add(mesh(new THREE.BoxGeometry(0.03, 0.25, 0.06), M.chrome, 0.1, 1.05, Z1+0.05, false, false));
 
 // glazing
-world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, L), M.frame, XG, 0.035, ZC));
+for(const [za, zb] of [[Z0, DOOR.z0], [DOOR.z1, Z1]]) world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, za-zb), M.frame, XG, 0.035, (za+zb)/2));
 world.add(mesh(new THREE.BoxGeometry(0.26, 0.16, L), M.frame, XG, H-0.08, ZC));
-const glass = new THREE.Mesh(new THREE.PlaneGeometry(L, H), M.glass);
-glass.rotation.y = Math.PI/2; glass.position.set(XG, H/2, ZC); glass.renderOrder = 2; world.add(glass);
+function glassPane(za, zb, y0, y1){
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(za-zb, y1-y0), M.glass);
+  g.rotation.y = Math.PI/2; g.position.set(XG, (y0+y1)/2, (za+zb)/2); g.renderOrder = 2; world.add(g);
+}
+glassPane(Z0, DOOR.z0, 0, H); glassPane(DOOR.z1, Z1, 0, H); glassPane(DOOR.z0, DOOR.z1, DOOR.h+0.08, H);
+// door frame and the leaf, hinged on the far post, swinging out to the terrace
+let doorPivot;
+{
+  for(const z of [DOOR.z0, DOOR.z1]) world.add(mesh(new THREE.BoxGeometry(0.2, DOOR.h+0.1, 0.09), M.frame, XG, (DOOR.h+0.1)/2, z));
+  world.add(mesh(new THREE.BoxGeometry(0.2, 0.1, DOOR.z0-DOOR.z1+0.09), M.frame, XG, DOOR.h+0.04, (DOOR.z0+DOOR.z1)/2));
+  doorPivot = new THREE.Group(); doorPivot.position.set(XG, 0, DOOR.z1); world.add(doorPivot);
+  const w = DOOR.z0 - DOOR.z1 - 0.1, leaf = new THREE.Group(); leaf.position.z = 0.05; doorPivot.add(leaf);
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w-0.1, DOOR.h-0.14), M.glass); pane.rotation.y = Math.PI/2; pane.position.set(0, DOOR.h/2, w/2); pane.renderOrder = 2; leaf.add(pane);
+  for(const z of [0.03, w-0.03]) leaf.add(mesh(new THREE.BoxGeometry(0.05, DOOR.h-0.02, 0.06), M.frame, 0, DOOR.h/2, z));
+  for(const y of [0.03, DOOR.h-0.05]) leaf.add(mesh(new THREE.BoxGeometry(0.05, 0.06, w), M.frame, 0, y, w/2));
+  leaf.add(mesh(new THREE.BoxGeometry(0.05, 0.3, w), M.frame, 0, 0.17, w/2));
+  for(const x of [-0.06, 0.06]) leaf.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 10), M.chrome, x, 1.05, w-0.14));
+  for(const x of [-0.06, 0.06]) for(const y of [0.9, 1.2]) leaf.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.06, 6), M.chrome, x/2, y, w-0.14, false, false));
+}
 const mullGeo = new THREE.BoxGeometry(0.2, H, 0.075);
 const finGeo = new THREE.BoxGeometry(0.06, H, 0.04);
 for(let z = Z0 - 0.4; z > Z1; z -= 2.85){
@@ -458,15 +501,16 @@ const terrace = mesh(new THREE.PlaneGeometry(6, L+80), M.pave, XG-3.0, -0.02, ZC
 terrace.rotation.x = -Math.PI/2; world.add(terrace);
 // planter wall with ivy
 planterTex.repeat.set((L+80)/2.75, 1/2.75);
-const planter = mesh(new THREE.BoxGeometry(0.7, 1.0, L+80), M.planter, -8.35, 0.48, ZC);
-world.add(planter);
-world.add(mesh(new THREE.BoxGeometry(0.62, 0.02, L+80), M.soil, -8.35, 0.99, ZC, false, true));
+for(const [za, zb] of [[Z0+40, STAIR.z0], [STAIR.z1, Z1-40]]){
+  world.add(mesh(new THREE.BoxGeometry(0.7, 1.0, za-zb), M.planter, -8.35, 0.48, (za+zb)/2));
+  world.add(mesh(new THREE.BoxGeometry(0.62, 0.02, za-zb), M.soil, -8.35, 0.99, (za+zb)/2, false, true));
+}
 // field below
 fieldTex.repeat.set(80, 120);
 const field = mesh(new THREE.PlaneGeometry(800, 1000), M.field, -408.5, -1.4, ZC, false, true);
 field.rotation.x = -Math.PI/2; world.add(field);
 // retaining face under planter
-world.add(mesh(new THREE.BoxGeometry(0.4, 1.4, L+80), M.planter, -8.85, -0.7, ZC, false, true));
+for(const [za, zb] of [[Z0+40, STAIR.z0], [STAIR.z1, Z1-40]]) world.add(mesh(new THREE.BoxGeometry(0.4, 1.4, za-zb), M.planter, -8.85, -0.7, (za+zb)/2, false, true));
 
 // ivy
 {
@@ -475,7 +519,7 @@ world.add(mesh(new THREE.BoxGeometry(0.4, 1.4, L+80), M.planter, -8.85, -0.7, ZC
   const ivy = new THREE.InstancedMesh(ivyGeo, new THREE.MeshStandardMaterial({flatShading:true, roughness:0.9}), n);
   const d = new THREE.Object3D(), col = new THREE.Color();
   for(let i=0;i<n;i++){
-    const z = Z0 + 40 - rand()*(L+80);
+    let z; do { z = Z0 + 40 - rand()*(L+80); } while(z > STAIR.z1 - 0.25 && z < STAIR.z0 + 0.25);
     const spill = rand() < 0.35;
     if(spill){ d.position.set(-7.98 - rand()*0.04, rr(0.2, 1.0), z); }
     else { d.position.set(rr(-8.7,-7.95), rr(1.0, 1.55) - (rand()<0.3?0:0), z); }
@@ -488,12 +532,12 @@ world.add(mesh(new THREE.BoxGeometry(0.4, 1.4, L+80), M.planter, -8.85, -0.7, ZC
 }
 
 // trees
-{
-  const clumpGeo = new THREE.IcosahedronGeometry(0.26, 0);
-  const trees = [
+const trees = [
     {x:-11.5,z:-3,h:11,r:4.2}, {x:-13.5,z:-15,h:9.5,r:3.6}, {x:-11,z:-27,h:10.5,r:4},
     {x:-14,z:-39,h:12,r:4.4}, {x:-11.8,z:-52,h:9,r:3.5}, {x:-13,z:-64,h:11,r:4}, {x:-12,z:9,h:10,r:3.8}, {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-12.5,z:-76,h:10,r:3.8}
-  ];
+];
+{
+  const clumpGeo = new THREE.IcosahedronGeometry(0.26, 0);
   const per = 1300, n = trees.length*per;
   const leaves = new THREE.InstancedMesh(clumpGeo, new THREE.MeshStandardMaterial({flatShading:true, roughness:0.9}), n);
   const d = new THREE.Object3D(), col = new THREE.Color();
@@ -802,7 +846,7 @@ for(const z of [20, -16, -38, -60]) banner(z, 2.7, 2.5, 0.3, 0.78);
 // ---------- the grill on the terrace ----------
 const smoke = [];
 {
-  const g = new THREE.Group(); g.position.set(-5.3, 0, -3.8); g.rotation.y = 0.5; world.add(g);
+  const g = new THREE.Group(); g.position.set(-5.3, 0, -6.2); g.rotation.y = 0.5; world.add(g);
   const black = new THREE.MeshStandardMaterial({color:0x1d1c1b, roughness:0.45, metalness:0.35});
   const steel = new THREE.MeshStandardMaterial({color:0xaeb2b5, roughness:0.35, metalness:0.8});
   const R = 0.28, Y = 0.74;
@@ -839,7 +883,7 @@ const smoke = [];
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:st, transparent:true, opacity:0.5, depthWrite:false}));
     sp.userData.t = i/7; g.add(sp); smoke.push(sp);
   }
-  addBox(-5.75, -4.85, -4.25, -3.35);
+  addBox(-5.75, -4.85, -6.65, -5.75);
 }
 function tickSmoke(dt){
   for(const sp of smoke){
@@ -848,6 +892,170 @@ function tickSmoke(dt){
     sp.position.set(Math.sin(t*9)*0.08 + t*0.15, 0.95 + t*1.3, Math.cos(t*7)*0.06);
     const sz = 0.18 + t*0.5; sp.scale.set(sz, sz, 1);
     sp.material.opacity = 0.42*(1-t)*(t < 0.1 ? t/0.1 : 1);
+  }
+}
+
+// ---------- outdoors: steps, meadow, gate, alpacas ----------
+function groundY(x, z){
+  if(x > STAIR.top) return 0;
+  if(z > STAIR.z1 && z < STAIR.z0 && x > STAIR.bottom) return -1.4 * Math.min(1, (STAIR.top - x)/(STAIR.top - STAIR.bottom));
+  return -1.4;
+}
+M.step = new THREE.MeshStandardMaterial({color:0xcbc3b5, roughness:0.9});
+{
+  const n = 7, run = (STAIR.top - STAIR.bottom)/n, w = STAIR.z0 - STAIR.z1, zc = (STAIR.z0 + STAIR.z1)/2;
+  for(let k=0;k<n;k++){
+    const top = -0.2*(k+1), xa = STAIR.top - k*run, hgt = top + 1.42;
+    world.add(mesh(new THREE.BoxGeometry(run, hgt, w), M.step, xa - run/2, -1.4 + hgt/2, zc, true, true));
+  }
+  for(const z of [STAIR.z0, STAIR.z1]) world.add(mesh(new THREE.BoxGeometry(2.4, 1.42, 0.12), M.step, STAIR.top - 1.2, -0.69, z + (z===STAIR.z0 ? 0.06 : -0.06), true, true));
+  addBox(-9.1, STAIR.top, STAIR.z0, Z0+40); addBox(-9.1, STAIR.top, Z1-40, STAIR.z1);
+  addBox(STAIR.bottom, STAIR.top, STAIR.z0, STAIR.z0+0.15); addBox(STAIR.bottom, STAIR.top, STAIR.z1-0.15, STAIR.z1);
+  for(const t of trees) addBox(t.x-0.32, t.x+0.32, t.z-0.32, t.z+0.32);
+}
+// meadow: tufts of grass and a scatter of flowers
+{
+  const pos = [], col = [], idx = [];
+  const base = [0.12, 0.3, 0.07], tip = [0.43, 0.68, 0.2];
+  for(let b=0;b<3;b++){
+    const a = b*Math.PI/3, c = Math.cos(a), sn = Math.sin(a), hw = 0.034, hgt = 0.3, o = pos.length/3;
+    pos.push(-hw*c, 0, -hw*sn,  hw*c, 0, hw*sn,  hw*0.35*c + 0.05*sn, hgt, hw*0.35*sn - 0.05*c,  -hw*0.35*c + 0.05*sn, hgt, -hw*0.35*sn - 0.05*c);
+    col.push(...base, ...base, ...tip, ...tip);
+    idx.push(o, o+1, o+2, o, o+2, o+3);
+  }
+  const tuft = new THREE.BufferGeometry();
+  tuft.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  tuft.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  tuft.setIndex(idx); tuft.computeVertexNormals();
+  const N = 13000;
+  const grass = new THREE.InstancedMesh(tuft, new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide}), N);
+  const d = new THREE.Object3D(), c = new THREE.Color();
+  for(let i=0;i<N;i++){
+    let x, z; do { x = rr(-36, -9.4); z = rr(-52, 52); } while(x > -11 && z > STAIR.z1-1 && z < STAIR.z0+1);
+    d.position.set(x, -1.4, z); d.rotation.set(0, rand()*Math.PI, 0); const sc = rr(0.7, 1.5); d.scale.set(sc, sc*rr(0.8,1.3), sc); d.updateMatrix();
+    grass.setMatrixAt(i, d.matrix); c.setHSL(0.26 + rr(-0.04, 0.04), rr(0.2, 0.5), rr(0.42, 0.56)); grass.setColorAt(i, c);
+  }
+  grass.receiveShadow = true; grass.frustumCulled = false; world.add(grass);
+  const F = 420, flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.035, 0), new THREE.MeshLambertMaterial(), F);
+  const petals = [0xfff1a8, 0xffffff, 0xf4b4d0, 0xb9a6e8, 0xffd36b];
+  for(let i=0;i<F;i++){
+    d.position.set(rr(-36, -9.6), -1.4 + rr(0.18, 0.3), rr(-52, 52)); d.rotation.set(0,0,0); d.scale.setScalar(rr(0.7,1.3)); d.updateMatrix();
+    flowers.setMatrixAt(i, d.matrix); c.set(petals[(rand()*petals.length)|0]); flowers.setColorAt(i, c);
+  }
+  flowers.frustumCulled = false; world.add(flowers);
+}
+// the gate to the Ili grassland (a separate world: vibe-shepherding)
+let gateHit;
+{
+  const GX = -21, GZ = -3.3, wood = new THREE.MeshStandardMaterial({color:0x8a6a48, roughness:0.85});
+  const g = new THREE.Group(); g.position.set(GX, -1.4, GZ); world.add(g);
+  for(const z of [-1.1, 1.1]) g.add(mesh(new THREE.BoxGeometry(0.16, 2.3, 0.16), wood, 0, 1.15, z));
+  g.add(mesh(new THREE.BoxGeometry(0.12, 0.12, 2.36), wood, 0, 2.3, 0));
+  const leaf = new THREE.Group(); leaf.position.set(0, 0, -1.02); leaf.rotation.y = 0.9; g.add(leaf);
+  for(let i=0;i<6;i++) leaf.add(mesh(new THREE.BoxGeometry(0.03, 1.1 + (i%2)*0.1, 0.09), wood, 0, 0.62, 0.12 + i*0.33));
+  for(const y of [0.35, 0.95]) leaf.add(mesh(new THREE.BoxGeometry(0.035, 0.07, 1.95), wood, 0.03, y, 1.0));
+  const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 320; const sg = sc.getContext('2d');
+  sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,320); sg.strokeStyle = '#8a6a48'; sg.lineWidth = 14; sg.strokeRect(7,7,1010,306);
+  sg.fillStyle = '#2b3a2a'; sg.textAlign = 'center'; sg.textBaseline = 'middle';
+  sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 120);
+  sg.font = '500 44px "DM Mono", ui-monospace, monospace'; sg.fillStyle = '#5d554d'; sg.fillText('alpacas this way · vibe-shepherding', 512, 230);
+  const st = new THREE.CanvasTexture(sc); st.encoding = THREE.sRGBEncoding; st.anisotropy = maxAniso;
+  const sign = mesh(new THREE.PlaneGeometry(1.6, 0.5), new THREE.MeshStandardMaterial({map:st, roughness:0.9, side:THREE.DoubleSide}), 0.02, 2.62, 0, true, true);
+  sign.rotation.y = Math.PI/2; g.add(sign);
+  g.add(mesh(new THREE.BoxGeometry(0.1, 0.1, 1.9), wood, 0, 2.95, 0));
+  gateHit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.2, 2.6), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+  gateHit.position.y = 1.6; gateHit.userData = {kind:'gate'}; g.add(gateHit);
+  addBox(GX-0.1, GX+0.1, GZ-1.2, GZ-1.0); addBox(GX-0.1, GX+0.1, GZ+1.0, GZ+1.2);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,320); sg.strokeStyle = '#8a6a48'; sg.strokeRect(7,7,1010,306); sg.fillStyle = '#2b3a2a'; sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 120); sg.font = '500 44px "DM Mono", ui-monospace, monospace'; sg.fillStyle = '#5d554d'; sg.fillText('alpacas this way · vibe-shepherding', 512, 230); st.needsUpdate = true; });
+}
+// alpacas: the herd from vibe-shepherding (CGTrader "Alpaca Animal" by Nyilonelycompany, shipped as an encrypted pack)
+const ALPACA_KEY = 'i/G4HOlP7aGXj99iwCZlkm0+WGp7bQqgC0Aql1dSt4s=';
+const alpacas = [];
+const MEADOW = {x0: -19.5, x1: -10.3, z0: -18, z1: 12};
+function meadowOk(x, z){
+  if(x < MEADOW.x0 || x > MEADOW.x1 || z < MEADOW.z0 || z > MEADOW.z1) return false;
+  if(x > -12.2 && z > STAIR.z1 - 1.5 && z < STAIR.z0 + 1.5) return false;
+  for(const t of trees) if(Math.hypot(t.x - x, t.z - z) < 1.9) return false;
+  return true;
+}
+function coatColor(){
+  const whites = ['#ffffff','#fff8ee','#fbf0df','#fdfaf4','#f1e6d6','#e9e7e4'];
+  const macarons = ['#efcdd5','#f8cac3','#f8d8c4','#fcd8b2','#fce9c0','#f4da98','#f8c1d5','#f7cfea','#fdf7c3','#f3d3c9'];
+  return new THREE.Color(rand() < 0.2 ? macarons[(rand()*macarons.length)|0] : whites[(rand()*whites.length)|0]);
+}
+(async ()=>{
+  if(!(window.crypto && crypto.subtle && THREE.GLTFLoader)) return;
+  try{
+    const res = await fetch('assets/alpaca.pack'); if(!res.ok) return;
+    const buf = await res.arrayBuffer();
+    const raw = Uint8Array.from(atob(ALPACA_KEY), c=>c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    const plain = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:new Uint8Array(buf, 0, 12)}, key, new Uint8Array(buf, 12)));
+    const gltf = await new Promise((ok, no)=> new THREE.GLTFLoader().parse(plain.buffer, '', ok, no));
+    let src = null; gltf.scene.traverse(o=>{ if(o.isMesh && !src) src = o; });
+    if(!src) return;
+    const geo = src.geometry;
+    const plainAttr = a => { const out = new Float32Array(a.count*3); for(let i=0;i<a.count;i++){ out[i*3]=a.getX(i); out[i*3+1]=a.getY(i); out[i*3+2]=a.getZ(i); } return new THREE.BufferAttribute(out, 3); };
+    if(geo.attributes._mid_position && geo.attributes._eat_position){
+      geo.morphAttributes.position = [plainAttr(geo.attributes._mid_position), plainAttr(geo.attributes._eat_position)];
+      geo.morphAttributes.normal = [plainAttr(geo.attributes._mid_normal), plainAttr(geo.attributes._eat_normal)];
+    }
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox, scale = 1.75/(bb.max.y - bb.min.y), cx = (bb.min.x + bb.max.x)/2, cz = (bb.min.z + bb.max.z)/2;
+    const spots = []; let tries = 0;
+    while(spots.length < 11 && tries++ < 2000){
+      const x = rr(MEADOW.x0, MEADOW.x1), z = rr(MEADOW.z0, MEADOW.z1);
+      if(!meadowOk(x, z) || spots.some(s => Math.hypot(s.x-x, s.z-z) < 2.2)) continue;
+      spots.push({x, z});
+    }
+    for(const sp of spots){
+      const mat = new THREE.MeshStandardMaterial({map:src.material.map, normalMap:src.material.normalMap, roughness:1, metalness:0, color:coatColor(), morphTargets:true, morphNormals:true});
+      const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; m.updateMorphTargets();
+      const sc = scale*rr(0.88, 1.08); m.scale.setScalar(sc); m.position.set(-cx*sc, -bb.min.y*sc, -cz*sc);
+      const g = new THREE.Group(); g.position.set(sp.x, -1.4, sp.z); g.rotation.y = rand()*Math.PI*2; g.add(m); world.add(g);
+      alpacas.push({g, m, x:sp.x, z:sp.z, yaw:g.rotation.y, state:'graze', t:rr(2,9), graze:1, tx:sp.x, tz:sp.z, speed:0.7, phase:rand()*7});
+    }
+  }catch(e){ console.warn('alpacas could not be loaded', e); }
+})();
+function pickTarget(a, awayX, awayZ){
+  for(let k=0;k<30;k++){
+    let x, z;
+    if(awayX !== undefined){ const ang = Math.atan2(a.z - awayZ, a.x - awayX) + rr(-0.6, 0.6), d = rr(4, 7); x = a.x + Math.cos(ang)*d; z = a.z + Math.sin(ang)*d; }
+    else { const ang = rand()*Math.PI*2, d = rr(2, 6); x = a.x + Math.cos(ang)*d; z = a.z + Math.sin(ang)*d; }
+    if(meadowOk(x, z)){ a.tx = x; a.tz = z; return true; }
+  }
+  return false;
+}
+function tickAlpacas(dt, time){
+  const outside = player.x < XG;
+  for(const a of alpacas){
+    a.t -= dt;
+    if(outside){
+      const d = Math.hypot(player.x - a.x, player.z - a.z);
+      if(d < 3.2 && a.state !== 'flee'){ if(pickTarget(a, player.x, player.z)){ a.state = 'flee'; a.speed = 1.7; a.t = 6; } }
+    }
+    if(a.t <= 0){
+      if(a.state === 'graze'){ a.state = rand() < 0.55 ? 'walk' : 'idle'; a.t = rr(2, 4); if(a.state === 'walk'){ a.speed = 0.7; if(!pickTarget(a)) a.state = 'idle'; } }
+      else { a.state = 'graze'; a.t = rr(5, 13); }
+    }
+    const wantGraze = a.state === 'graze' ? 1 : 0;
+    a.graze += (wantGraze - a.graze) * Math.min(1, dt*1.6);
+    if(a.m.morphTargetInfluences && a.m.morphTargetInfluences.length >= 2){
+      const gz = a.graze; a.m.morphTargetInfluences[0] = 1 - Math.abs(2*gz - 1); a.m.morphTargetInfluences[1] = Math.max(0, 2*gz - 1);
+    }
+    let moving = false;
+    if(a.state === 'walk' || a.state === 'flee'){
+      const dx = a.tx - a.x, dz = a.tz - a.z, dist = Math.hypot(dx, dz);
+      if(dist < 0.3){ a.state = 'graze'; a.t = rr(4, 10); }
+      else {
+        const want = Math.atan2(dx, dz); let diff = want - a.yaw; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        a.yaw += THREE.MathUtils.clamp(diff, -2.2*dt, 2.2*dt);
+        if(Math.abs(diff) < 0.9){ a.x += Math.sin(a.yaw)*a.speed*dt; a.z += Math.cos(a.yaw)*a.speed*dt; moving = true; }
+      }
+    }
+    a.g.position.set(a.x, -1.4 + (moving ? Math.abs(Math.sin(time*7 + a.phase))*0.03 : 0), a.z);
+    a.g.rotation.y = a.yaw;
+    a.g.rotation.z = moving ? Math.sin(time*7 + a.phase)*0.02 : 0;
   }
 }
 
@@ -939,7 +1147,7 @@ setSun(sunT);
 sunInput.addEventListener('input', ()=>{ sunT = sunInput.value/1000; setSun(sunT); });
 
 // ---------- player ----------
-const player = { x:-0.35, z:0.6, yaw:0.2, pitch:-0.04, vx:0, vz:0, bob:0 };
+const player = { x:-0.35, y:0, z:0.6, yaw:0.2, pitch:-0.04, vx:0, vz:0, bob:0 };
 const EYE = 1.62, R = 0.28;
 const keysDown = new Set();
 addEventListener('keydown', e=>{
@@ -1037,7 +1245,7 @@ function fadeHint(){ if(hintFaded) return; hintFaded = true; hintTimer = setTime
 document.addEventListener('pointerlockchange', ()=>{ if(!locked){ hint.style.opacity = '1'; hintFaded=false; clearTimeout(hintTimer);} else fadeHint(); });
 
 // ---------- looking at posters and the bin ----------
-const interactables = posters.map(p=>p.mesh).concat([binHit]);
+const interactables = posters.map(p=>p.mesh).concat([binHit, gateHit]);
 const raycaster = new THREE.Raycaster(); raycaster.far = 3.6;
 const promptEl = document.getElementById('prompt');
 let hover = null;
@@ -1059,6 +1267,8 @@ function setHover(obj){
     const key = isTouch ? 'Tap' : 'Click or E';
     promptEl.innerHTML = hover.userData.kind==='poster'
       ? '<b>'+key+'</b> · read the notes, leave a kind word'
+      : hover.userData.kind==='gate'
+      ? '<b>'+key+'</b> · the gate to the Ili grassland'
       : '<b>'+key+'</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -1209,8 +1419,14 @@ redrawPosters(true); updateBin();
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=> redrawPosters(true));
 
 // ---------- the board overlay ----------
+const gatePanel = document.getElementById('gate');
 function openBoard(obj){
   if(boardOpen) return;
+  if(obj.userData.kind==='gate'){
+    boardOpen = true; keysDown.clear(); joyVec = {x:0,y:0}; setHover(null);
+    if(locked && document.exitPointerLock) document.exitPointerLock();
+    gatePanel.hidden = false; return;
+  }
   if(obj.userData.kind==='poster'){ mode = 'poster'; current = posters[obj.userData.n-1]; }
   else { mode = 'bin'; current = null; }
   boardOpen = true; keysDown.clear(); joyVec = {x:0,y:0}; setHover(null);
@@ -1222,7 +1438,7 @@ function openBoard(obj){
 }
 function closeBoard(){
   if(!boardOpen) return;
-  boardOpen = false; board.hidden = true; setStatus('');
+  boardOpen = false; board.hidden = true; gatePanel.hidden = true; setStatus('');
   canvas.focus(); if(!isTouch) tryLock();
 }
 function canRemove(n){ if(dataMode==='rest') return false; return dataMode==='local' || isOwner || (myId && n.author === myId); }
@@ -1300,11 +1516,19 @@ swapBtn.addEventListener('click', ()=>{
   setStatus(''); renderBoard();
 });
 document.getElementById('boardClose').addEventListener('click', closeBoard);
+document.getElementById('gateClose').addEventListener('click', closeBoard);
+gatePanel.addEventListener('pointerdown', e=>{ if(e.target === gatePanel) closeBoard(); });
 board.addEventListener('pointerdown', e=>{ if(e.target === board) closeBoard(); });
 
 function collide(){
-  player.x = THREE.MathUtils.clamp(player.x, XG+0.24+R, XW-R);
-  player.z = THREE.MathUtils.clamp(player.z, Z1+R, Z0-R);
+  const inDoorZ = player.z > DOOR.z1 + R && player.z < DOOR.z0 - R;
+  if(inDoorZ && DOOR.angle < -1.1){
+    if(Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, DOOR.z1 + R, DOOR.z0 - R);
+  } else if(player.x >= XG) player.x = Math.max(player.x, XG + 0.24 + R);
+  else player.x = Math.min(player.x, XG - 0.24 - R);
+  player.x = Math.min(player.x, XW - R); player.x = Math.max(player.x, -70);
+  if(player.x > XG) player.z = THREE.MathUtils.clamp(player.z, Z1+R, Z0-R);
+  else player.z = THREE.MathUtils.clamp(player.z, Z1-38, Z0+38);
   for(const b of colliders){
     const minX=b.minX-R, maxX=b.maxX+R, minZ=b.minZ-R, maxZ=b.maxZ+R;
     if(player.x>minX && player.x<maxX && player.z>minZ && player.z<maxZ){
@@ -1349,14 +1573,21 @@ function frame(){
   player.bob += v*dt*2.6;
   const bob = reduceMotion ? 0 : Math.sin(player.bob*2)*0.022*Math.min(v/2,1);
 
-  camera.position.set(player.x, EYE + bob, player.z);
+  player.y += (groundY(player.x, player.z) - player.y) * Math.min(1, dt*14);
+  camera.position.set(player.x, player.y + EYE + bob, player.z);
   camera.rotation.set(player.pitch, player.yaw, 0);
   camera.updateMatrixWorld();
+  // the glass door opens itself when you come near
+  const dd = Math.hypot(player.x - XG, player.z - (DOOR.z0 + DOOR.z1)/2);
+  DOOR.target = dd < 2.6 ? -1.55 : 0;
+  DOOR.angle += THREE.MathUtils.clamp(DOOR.target - DOOR.angle, -2.4*dt, 2.4*dt);
+  doorPivot.rotation.y = DOOR.angle;
+  tickAlpacas(dt, clock.elapsedTime);
   setHover((boardOpen || !intro.hidden) ? null : pick(0, 0));
   sky.position.copy(camera.position);
 
   // shadow frustum follows where you look, snapped to limit shimmer
-  const cx = -3, czRaw = player.z + fwd.z*14;
+  const cx = player.x < -6 ? Math.max(-30, player.x + fwd.x*8) : -3, czRaw = player.z + fwd.z*14;
   const cz = Math.round(czRaw/2)*2;
   sun.target.position.set(cx, 0, cz);
   sun.position.set(cx + sunDir.x*70, sunDir.y*70, cz + sunDir.z*70);
