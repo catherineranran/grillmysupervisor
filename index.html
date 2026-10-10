@@ -374,6 +374,39 @@ function alphaLeafMat(tex){
 M.monstera = alphaLeafMat(leafTex);
 M.banana = alphaLeafMat(bananaTex);
 
+// image assets published next to the page
+const texLoader = new THREE.TextureLoader();
+function loadTex(url, opts){
+  const t = texLoader.load(url);
+  t.encoding = THREE.sRGBEncoding; t.anisotropy = maxAniso;
+  if(opts && opts.repeat){ t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  return t;
+}
+function cutoutMat(tex, extra){
+  const m = new THREE.MeshStandardMaterial(Object.assign({map:tex, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.9}, extra||{}));
+  m.userData.depth = new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, map:tex, alphaTest:0.5});
+  return m;
+}
+function cutoutMesh(geo, mat, cast){
+  const m = new THREE.Mesh(geo, mat); m.castShadow = !!cast; m.receiveShadow = true;
+  if(cast) m.customDepthMaterial = mat.userData.depth;
+  return m;
+}
+const T = {
+  banner: loadTex('assets/banner.png'),
+  bow: loadTex('assets/bow.png'),
+  tulip: loadTex('assets/tulip.png'),
+  minerva: loadTex('assets/minerva.png'),
+  mpiBoard: loadTex('assets/mpi-board.jpg'),
+};
+M.flag = cutoutMat(T.banner);
+M.bow = cutoutMat(T.bow);
+M.tulip = cutoutMat(T.tulip, {roughness:0.7});
+M.minerva = new THREE.MeshStandardMaterial({map:T.minerva, transparent:true, depthWrite:false, roughness:0.95, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+M.mpiBoard = new THREE.MeshStandardMaterial({map:T.mpiBoard, roughness:0.8});
+M.boardBack = new THREE.MeshStandardMaterial({color:0xf3efe8, roughness:0.85});
+M.string = new THREE.MeshStandardMaterial({color:0xe8dcc4, roughness:0.9});
+
 // ---------- architecture ----------
 const L = 108, Z0 = 38, Z1 = Z0 - L, ZC = (Z0+Z1)/2, H = 4.6, XG = -2.0, XW = 2.0;
 const world = new THREE.Group(); scene.add(world);
@@ -579,6 +612,27 @@ function plant(zc){
   addBox(1.08, 2, zc-0.42, zc+0.42);
 }
 
+// the tulip from Ranran's website, potted: two crossed cut-out planes (the drawing's mound is cropped so the stems sit in the soil)
+const tulipGeos = (()=>{
+  const w = 0.92, h = w * (1754*0.86/900);
+  const g = new THREE.PlaneGeometry(w, h); g.translate(0, h/2, 0);
+  const uv = g.attributes.uv; for(let i=0;i<uv.count;i++) uv.setY(i, 0.14 + uv.getY(i)*0.86);
+  return g;
+})();
+function tulipPlant(zc){
+  const g = new THREE.Group(); g.position.set(1.48, 0, zc);
+  g.add(mesh(new THREE.CylinderGeometry(0.34, 0.27, 0.5, 28), M.pot, 0, 0.25, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.02, 28), M.soil, 0, 0.49, 0, false, true));
+  const yaw = rr(0, Math.PI);
+  for(const a of [0, Math.PI/2]){
+    const leaf = cutoutMesh(tulipGeos, M.tulip, true);
+    leaf.position.y = 0.47; leaf.rotation.y = yaw + a;
+    g.add(leaf);
+  }
+  world.add(g);
+  addBox(1.08, 2, zc-0.42, zc+0.42);
+}
+
 const lampLights = [];
 function lamp(zc){
   const g = new THREE.Group(); g.position.set(1.18, 0, zc);
@@ -641,6 +695,7 @@ function bookshelf(zc){
   }
 }
 
+const tulipAt = new Set([26.75, -7.05, -51.25]);
 for(const z0 of [32, 12, -1.8, -24, -46]){
   bookshelf(z0 + 1.45);
   bookshelf(z0 + 2.4);
@@ -648,7 +703,7 @@ for(const z0 of [32, 12, -1.8, -24, -46]){
   sofa(z0 - 2.2);
   sideTable(z0 - 3.55);
   lamp(z0 - 4.6);
-  plant(z0 - 5.25);
+  if(tulipAt.has(z0 - 5.25)) tulipPlant(z0 - 5.25); else plant(z0 - 5.25);
   doorway(z0 - 7.4);
 }
 // a few lone benches further along
@@ -674,12 +729,126 @@ const posters = [];
     const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = maxAniso;
     const mat = new THREE.MeshStandardMaterial({map:tex, roughness:0.88});
     const m = new THREE.Mesh(posterGeo, mat);
-    m.rotation.y = -Math.PI/2; m.position.set(XW-0.042, 2.38, z); m.receiveShadow = true;
+    m.rotation.y = -Math.PI/2; m.position.set(XW-0.042, 3.22, z); m.receiveShadow = true;
     m.userData = {kind:'poster', n:i+1};
     world.add(m);
-    world.add(mesh(frameGeo, frameMat, XW-0.02, 2.38, z, false, true));
+    world.add(mesh(frameGeo, frameMat, XW-0.02, 3.22, z, false, true));
     posters.push({n:i+1, z, mesh:m, mat, canvas:c, ctx:c.getContext('2d'), tex, key:null});
   });
+}
+
+// ---------- photo banners (pennants on a string across the sofas) ----------
+const FLAGS = 15, flagGeos = [];
+for(let i=0;i<FLAGS;i++){
+  const g = new THREE.PlaneGeometry(0.27, 0.37); g.translate(0, -0.185, 0);
+  const uv = g.attributes.uv, u0 = (i%8)/8, v1 = 1 - ((i/8)|0)/2;
+  for(let k=0;k<uv.count;k++) uv.setXY(k, u0 + uv.getX(k)/8, v1 - (1-uv.getY(k))/2);
+  flagGeos.push(g);
+}
+const bowGeo = new THREE.PlaneGeometry(0.22, 0.183);
+function banner(zc, span, yEnd, sag, scale){
+  const g = new THREE.Group(); world.add(g);
+  const pts = [];
+  for(let i=0;i<=24;i++){ const t = i/24, u = 2*t-1; pts.push(new THREE.Vector3(XW-0.075, yEnd - sag*(1-u*u), zc + span/2 - t*span)); }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  g.add(mesh(new THREE.TubeGeometry(curve, 48, 0.004, 5, false), M.string, 0,0,0, false, false));
+  for(let i=0;i<FLAGS;i++){
+    const t = (i + 0.5)/FLAGS;
+    const p = curve.getPointAt(t);
+    const f = cutoutMesh(flagGeos[i], M.flag, true);
+    f.position.copy(p); f.position.x -= 0.004;
+    f.rotation.set(0, -Math.PI/2, 0);
+    f.rotateX(rr(-0.08, 0.08)); f.rotateZ(rr(-0.03, 0.03));
+    f.scale.setScalar(scale);
+    g.add(f);
+  }
+  for(const s of [-1, 1]){
+    const b = cutoutMesh(bowGeo, M.bow, false);
+    b.position.set(XW-0.07, yEnd + 0.02, zc + s*span/2); b.rotation.set(0, -Math.PI/2, 0); b.scale.setScalar(scale*1.1);
+    g.add(b);
+  }
+}
+for(const z0 of [32, 12, -1.8, -24, -46]) banner(z0 - 1.1, 4.1, 2.52, 0.36, 1);
+for(const z of [20, -16, -38, -60]) banner(z, 2.7, 2.5, 0.3, 0.78);
+
+// ---------- MPI boards leaning by the shelves ----------
+{
+  const boardGeo = new THREE.PlaneGeometry(1.1, 0.3);
+  const backGeo = new THREE.BoxGeometry(0.012, 0.3, 1.1);
+  for(const z of [1.75, 2.95, -20.4]){
+    const g = new THREE.Group(); g.position.set(XW - 0.095, 0, z); g.rotation.z = -0.21;
+    const back = mesh(backGeo, M.boardBack, 0.006, 0.15, 0); g.add(back);
+    const face = mesh(boardGeo, M.mpiBoard, -0.001, 0.15, 0, false, true); face.rotation.y = -Math.PI/2; g.add(face);
+    world.add(g);
+  }
+}
+
+// ---------- VR Minerva decals on the floor, glass side ----------
+{
+  const decalGeo = new THREE.PlaneGeometry(1, 753/768);
+  const spots = []; let tries = 0;
+  while(spots.length < 26 && tries++ < 600){
+    const z = rr(Z1+2, Z0-2), x = rr(-1.55, -0.55);
+    if(spots.some(s => Math.abs(s.z - z) < 1.6)) continue;
+    spots.push({x, z});
+  }
+  for(const s of spots){
+    const d = mesh(decalGeo, M.minerva, s.x, 0.004, s.z, false, true);
+    d.rotation.set(-Math.PI/2, 0, rr(0, Math.PI*2)); d.scale.setScalar(rr(0.5, 0.78));
+    world.add(d);
+  }
+}
+
+// ---------- the grill on the terrace ----------
+const smoke = [];
+{
+  const g = new THREE.Group(); g.position.set(-5.3, 0, -3.8); g.rotation.y = 0.5; world.add(g);
+  const black = new THREE.MeshStandardMaterial({color:0x1d1c1b, roughness:0.45, metalness:0.35});
+  const steel = new THREE.MeshStandardMaterial({color:0xaeb2b5, roughness:0.35, metalness:0.8});
+  const R = 0.28, Y = 0.74;
+  g.add(mesh(new THREE.SphereGeometry(R, 28, 14, 0, Math.PI*2, Math.PI/2, Math.PI/2), black, 0, Y, 0));
+  const rim = mesh(new THREE.TorusGeometry(R, 0.012, 8, 40), steel, 0, Y, 0); rim.rotation.x = Math.PI/2; g.add(rim);
+  // lid, hinged open at the back
+  const hinge = new THREE.Group(); hinge.position.set(-R, Y, 0); hinge.rotation.z = 1.95; g.add(hinge);
+  const lid = mesh(new THREE.SphereGeometry(R, 28, 14, 0, Math.PI*2, 0, Math.PI/2), black, R, 0, 0); hinge.add(lid);
+  const lidRim = mesh(new THREE.TorusGeometry(R, 0.012, 8, 40), steel, R, 0, 0); lidRim.rotation.x = Math.PI/2; hinge.add(lidRim);
+  hinge.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 8), steel, R, R+0.03, 0));
+  hinge.add(mesh(new THREE.TorusGeometry(0.02, 0.006, 6, 16), steel, R, R+0.11, 0));
+  // grate and coals
+  const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 28), new THREE.MeshStandardMaterial({color:0x3a2a22, emissive:0xff5a1a, emissiveIntensity:0.9, roughness:1}));
+  coals.rotation.x = -Math.PI/2; coals.position.y = Y - 0.12; g.add(coals);
+  for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 6), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; g.add(bar); }
+  // what's cooking
+  const sausage = new THREE.MeshStandardMaterial({color:0x8d4a2e, roughness:0.6});
+  for(let i=0;i<4;i++){ const s = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.15, 10), sausage, -0.12 + i*0.075, Y+0.03, 0.02); s.rotation.x = Math.PI/2; s.rotation.z = rr(-0.1,0.1); g.add(s); }
+  g.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.025, 16), new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7}), 0.13, Y+0.02, -0.12));
+  g.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.025, 16), new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7}), 0.12, Y+0.02, 0.13));
+  // legs, wheels, ash pan
+  for(const [ax, az, wheel] of [[-0.6, 0.8, true], [-0.6, -0.8, true], [1, 0, false]]){
+    const leg = mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.56, 8), steel, ax*0.2, Y-R-0.1, az*0.2);
+    leg.rotation.z = -ax*0.22; leg.rotation.x = az*0.22; g.add(leg);
+    if(wheel){ const wh = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 18), black, ax*0.3, 0.07, az*0.3); wh.rotation.x = Math.PI/2; g.add(wh); }
+  }
+  g.add(mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.04, 20), black, 0, Y-R-0.06, 0));
+  // smoke
+  const sc = document.createElement('canvas'); sc.width = sc.height = 64;
+  const sg = sc.getContext('2d'); const grd = sg.createRadialGradient(32,32,2,32,32,30); grd.addColorStop(0,'rgba(235,232,228,0.9)'); grd.addColorStop(1,'rgba(235,232,228,0)');
+  sg.fillStyle = grd; sg.fillRect(0,0,64,64);
+  const st = new THREE.CanvasTexture(sc);
+  for(let i=0;i<7;i++){
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:st, transparent:true, opacity:0.5, depthWrite:false}));
+    sp.userData.t = i/7; g.add(sp); smoke.push(sp);
+  }
+  addBox(-5.75, -4.85, -4.25, -3.35);
+}
+function tickSmoke(dt){
+  for(const sp of smoke){
+    sp.userData.t += dt*0.22; if(sp.userData.t > 1) sp.userData.t -= 1;
+    const t = sp.userData.t;
+    sp.position.set(Math.sin(t*9)*0.08 + t*0.15, 0.95 + t*1.3, Math.cos(t*7)*0.06);
+    const sz = 0.18 + t*0.5; sp.scale.set(sz, sz, 1);
+    sp.material.opacity = 0.42*(1-t)*(t < 0.1 ? t/0.1 : 1);
+  }
 }
 
 // ---------- the one and only bin ----------
@@ -1192,6 +1361,7 @@ function frame(){
   sun.target.position.set(cx, 0, cz);
   sun.position.set(cx + sunDir.x*70, sunDir.y*70, cz + sunDir.z*70);
 
+  tickSmoke(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
