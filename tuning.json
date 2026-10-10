@@ -1,0 +1,67 @@
+{
+  "grass": {
+    "toon": true,
+    "light": "#dfe684",
+    "lightDeep": "#42518f",
+    "shadow": "#5a678c",
+    "edge": 0.12,
+    "softness": 0.045,
+    "variation": 0.43,
+    "flowers": 0.45,
+    "hues": 0.49
+  },
+  "forest": {
+    "lit": "#dbe2a1",
+    "shade": "#4f6787",
+    "hues": 0.5
+  },
+  "sheep": {
+    "toon": true,
+    "light": "#ffffff",
+    "shadow": "#97a395",
+    "followGrass": 0.55,
+    "edge": 0.16,
+    "softness": 0.075,
+    "texture": 0.49,
+    "fuzz": 0.22,
+    "rim": 1,
+    "brightness": 1.54,
+    "highlight": 1.5
+  },
+  "sky": {
+    "elevation": 32.5,
+    "azimuth": 0,
+    "sun": 2.8,
+    "skyLight": 0.95,
+    "zenith": "#2a66bd",
+    "horizon": "#c2d8ee",
+    "band": 0.33,
+    "haze": 0.31,
+    "air": 0.26,
+    "exposure": 1.65,
+    "bloom": 1.5,
+    "cloudCover": 0.17,
+    "cloudStrength": 0,
+    "cloudSoftness": 1,
+    "cloudSpeed": 0.65
+  },
+  "water": {
+    "color": "#1d3a44",
+    "reflection": 0.85,
+    "ripple": 2.3,
+    "glitter": 2.43,
+    "glitterColor": "#ffe2a8",
+    "lake": "#2f6fae"
+  },
+  "sound": {
+    "master": 0.8,
+    "wind": 0.13,
+    "water": 0.13,
+    "sheep": 0.8,
+    "bees": 0.7,
+    "birds": 0.5,
+    "music": 1.06,
+    "musicStyle": "kuy"
+  },
+  "savedAt": 1791128805432
+}

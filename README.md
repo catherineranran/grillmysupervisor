@@ -1,87 +1,49 @@
 # Where the Light Rests · grillmysupervisor.online
 
-A walkable, first-person 3D gallery of sandstone and glass, built with Three.js in a single `index.html`.
-Kind words get pinned on the posters above the sofas; complaints go in the one and only bin.
+A walkable, first-person gallery of sandstone and glass standing on the Ili grassland. Kind words get pinned on the posters above the sofas; complaints go in the one and only bin; alpacas graze on the meadow below the terrace.
 
 Live at **https://grillmysupervisor.online** (GitHub Pages, deployed from the `main` branch).
 
+The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flock are forked from [vibe-shepherding](https://ranranli.net/vibe-shepherding/) (itself a clone of [hyraland/shepherd](https://github.com/hyraland/shepherd), MIT); the gallery and everything in it is built in code on top of that engine.
+
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `index.html` | The whole site: scene, controls, posters, bin, the outdoors and the notes layer |
-| `assets/` | Textures (photo banner, logos, tulip) and `alpaca.pack.txt`, the encrypted alpaca model (base64) shared with vibe-shepherding |
-| `CNAME` | Tells GitHub Pages which custom domain serves the site |
-| `.nojekyll` | Skips the Jekyll build so the page is served exactly as written |
-
-## Outdoors
-
-The glass door by the first sofa opens onto the terrace (and the grill). Steps lead down through the planter wall to a meadow where the alpacas from [vibe-shepherding](https://ranranli.net/vibe-shepherding/) graze. The wooden gate at the far side of the meadow opens that site in a new tab.
+| `page.html` | The page as written (full document). `index.html` is built from it with the notes backend filled in |
+| `index.html` | What the site serves |
+| `src/app.js` | Wires it all up: renderer, lights, the walk, posters and bin, shared notes, quality levels |
+| `src/gallery.js` | The gallery: corridor, glazing and door, furniture, banner, posters, boards, decals, plants, grill, terrace, steps, bin, gate |
+| `src/siteConst.js` | Where the gallery stands in the valley and the shape of its platform (shared by the JS and GLSL terrain) |
+| `src/*` (the rest) | The vibe-shepherding engine: `terrain`, `world`, `grass`, `flowers`, `scenery`, `rivers`, `sky`, `bees`, `audio`, `music*`, `post`, `flock`, `sheep*`, `config`, `tuning`, `noise*`, `shaders`, `materials` — lightly patched so the terrain is level under the platform and no grass grows on it |
+| `assets/` | Banner atlas, bow, logos, tulip, `alpaca.pack.txt` (the encrypted alpaca model, base64) and the bleat recordings |
+| `tuning.json` | The look tuning from vibe-shepherding |
+| `CNAME`, `.nojekyll` | GitHub Pages: custom domain, no Jekyll build |
+| `LICENSE-shepherd` | The MIT license of the original *Herding Sheep on the Ili Grassland* |
 
 ## Controls
 
-- **Desktop:** click the scene to look around, `W A S D` to walk, `Shift` to walk faster, `E` (or click) to read a poster or open the bin, `[` `]` to move the sun, `Esc` to free the cursor.
-- **Phone:** left thumb walks, right thumb looks, tap a poster or the bin.
+- **Desktop:** click the scene to look around, `W A S D` to walk, `Shift` to walk faster, `E` (or click) to read a poster or open the bin, `P` for the list of all posters, `[` `]` to move the sun, `Esc` to free the cursor.
+- **Phone:** left thumb walks, right thumb looks, tap a poster or the bin; the Posters button lists them all.
 
-## DNS for the custom domain
+## Shared notes (Supabase)
 
-At Namecheap (Domain List → Manage → Advanced DNS), where `grillmysupervisor.online` is registered:
+The page talks to a Supabase project over its REST API with the publishable key (public by design); row-level security is what limits visitors:
 
-| Type | Host | Value |
-| --- | --- | --- |
-| A | `@` | `185.199.108.153` |
-| A | `@` | `185.199.109.153` |
-| A | `@` | `185.199.110.153` |
-| A | `@` | `185.199.111.153` |
-| AAAA | `@` | `2606:50c0:8000::153` |
-| AAAA | `@` | `2606:50c0:8001::153` |
-| AAAA | `@` | `2606:50c0:8002::153` |
-| AAAA | `@` | `2606:50c0:8003::153` |
-| CNAME | `www` | `catherineranran.github.io` |
+- `public.notes` — one row per note: `kind` (`wall` or `bin`), `poster`, `text` (≤ 200), `sig` (≤ 24), `at`, `hidden`. Anyone can read rows that are not hidden and add rows; nobody can edit or delete from the site.
+- `public.posters` — one row per poster (`n` 1–14): `title`. Read-only from the site. **Rename a poster** by editing its `title` in the Supabase Table Editor; the page picks it up on its next refresh (every 30 s, or when a poster is opened).
 
-Once the records have propagated, turn on **Enforce HTTPS** in the repository's *Settings → Pages* (GitHub issues the certificate automatically; the option can take up to a day to become available).
+Moderation: in the Table Editor tick `hidden` on a note to take it off the wall or out of the bin, or delete the row.
 
-## Shared notes backend
+The project URL and key live in `index.html` (`window.GRILL_CONFIG`), written by the build. The claude.ai artifact copy of the page keeps its notes in the artifact's own database instead, since its sandbox cannot reach outside services.
 
-Inside claude.ai the page uses the artifact's own database. On the public site it needs a small backend of its own, otherwise notes stay on the visitor's screen only.
+## DNS
 
-The page speaks the Supabase REST API. To connect one:
-
-1. Create a free project at supabase.com and run this in its SQL editor:
-
-   ```sql
-   create table public.notes (
-     id      uuid primary key default gen_random_uuid(),
-     kind    text not null check (kind in ('wall', 'bin')),
-     poster  int  not null default 0,
-     text    text not null check (char_length(text) between 1 and 200),
-     sig     text not null default '' check (char_length(sig) <= 24),
-     at      timestamptz not null default now(),
-     hidden  boolean not null default false
-   );
-
-   alter table public.notes enable row level security;
-
-   create policy "anyone can read visible notes"
-     on public.notes for select to anon using (hidden = false);
-
-   create policy "anyone can leave a note"
-     on public.notes for insert to anon with check (hidden = false);
-   ```
-
-2. Put the project URL and the publishable (anon) key into the `BACKEND` constant near the top of the script in `index.html`:
-
-   ```js
-   const BACKEND = { url: 'https://tmijmyemlecbyqtlrmbj.supabase.co', key: 'sb_publishable_…', table: 'notes' };
-   ```
-
-The publishable key is meant to be public; the row-level-security policies above are what limit what visitors can do (read notes that are not hidden, add notes within the length limits, nothing else).
-
-### Moderation
-
-Open the `notes` table in the Supabase dashboard. Tick `hidden` on a row to take it off the wall or out of the bin without deleting it, or delete the row outright. Visitors cannot edit or delete notes from the site.
+Namecheap → Advanced DNS: four `A @` records to `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`, and `CNAME www` → `catherineranran.github.io`. HTTPS is enforced in the repository's Pages settings.
 
 ## Credits
 
-- Alpaca: "Alpaca Animal" by Nyilonelycompany (CGTrader Royalty Free License, bought by the site owner). As in vibe-shepherding, the model ships only as an AES-GCM encrypted package (`assets/alpaca.pack.txt`, base64) that the page decrypts in memory, so the model files themselves are not redistributed.
-- Scene, furniture, trees, grass and the grill are generated in code with [three.js](https://threejs.org/) r128.
+- *Herding Sheep on the Ili Grassland* by Hyraland — [hyraland/shepherd](https://github.com/hyraland/shepherd) (MIT License); forked here via vibe-shepherding, which swapped the sheep for alpacas.
+- Alpaca: "Alpaca Animal" by Nyilonelycompany — [CGTrader](https://www.cgtrader.com/3d-models/animal/mammal/alpaca-animal) (Royalty Free License, bought by the site owner), recoloured. It ships only as an AES-GCM encrypted package decrypted in memory, so the model files are not redistributed.
+- Sounds: sheep bleats from "Yo Frankie!" © Blender Foundation — [OpenGameArt](https://opengameart.org/content/sheep-sound-bleats-yo-frankie), CC BY 3.0 (pitch shifted per animal); "Sheep Baa" by AntumDeluge from a recording by mikewest — [OpenGameArt](https://opengameart.org/node/132779), CC0. Wind, water, bees, skylarks and music are synthesised live.
+- Rendering: [three.js](https://threejs.org/) (MIT License).
