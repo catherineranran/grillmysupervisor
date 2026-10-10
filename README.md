@@ -31,10 +31,10 @@ The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flo
 
 The page talks to a Supabase project over its REST API with the publishable key (public by design); row-level security is what limits visitors:
 
-- `public.notes` — one row per note: `kind` (`wall`, `bin` or `grill`), `poster`, `text` (≤ 200; a sausage is a row with kind `grill` and text 🌭), `sig` (≤ 24), `at`, `hidden`. Anyone can read rows that are not hidden and add rows; nobody can edit or delete from the site. The grill shows up to 16 sausages at a time; its board carries the full count.
+- `public.notes` — one row per note: `kind` (`wall`, `bin` or `grill`), `poster`, `text` (≤ 200; a sausage is a row with kind `grill` and text 🌭), `sig` (≤ 24), `at`, `hidden`, `owner_token` (write-only for the site). Anyone can read rows that are not hidden and add rows; a note can only be hidden through `delete_note` (own token or admin password), never edited. The grill shows up to 16 sausages at a time; its board carries the full count.
 - `public.posters` — one row per poster (`n` 1–14): `title`. Read-only from the site. **Rename a poster** by editing its `title` in the Supabase Table Editor; the page picks it up on its next refresh (every 30 s, or when a poster is opened).
 
-Moderation: in the Table Editor tick `hidden` on a note to take it off the wall or out of the bin, or delete the row.
+Moderation: in the Table Editor tick `hidden` on a note to take it off the wall or out of the bin, or delete the row. From the site itself every note has a **delete** link: a note written from the same browser goes at once (each browser carries a random token, stored with its notes in `owner_token`, which nobody can read back); any other note asks for the admin password. The check happens in the database function `delete_note(p_id, p_token)` (SQL editor → Database → Functions), which hides the row rather than deleting it — change the password there.
 
 The project URL and key live in `index.html` (`window.GRILL_CONFIG`), written by the build. The claude.ai artifact copy of the page keeps its notes in the artifact's own database instead, since its sandbox cannot reach outside services.
 

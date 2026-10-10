@@ -325,7 +325,7 @@ const rest = {
     binNotes = rows.filter((x) => x && x.kind === 'bin').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     grillNotes = rows.filter((x) => x && x.kind === 'grill').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length);
-    if (boardOpen && !board.hidden) renderBoard();
+    if (boardOpen && !board.hidden && !askingFor) renderBoard();
     if (!listPanel.hidden) renderList();
     if (!grillPanel.hidden) renderGrill();
     if (!wishPanel.hidden) renderWish();
@@ -337,11 +337,24 @@ const rest = {
     } catch (e) {}
   },
   async add(kind, doc) {
-    const body = { kind, poster: doc.poster || 0, text: doc.text, sig: doc.sig };
+    const body = { kind, poster: doc.poster || 0, text: doc.text, sig: doc.sig, owner_token: visitorToken };
     const r = await fetch(this.base(BACKEND.table), { method: 'POST', headers: this.headers({ Prefer: 'return=minimal' }), body: JSON.stringify(body) });
     if (!r.ok) throw new Error('add ' + r.status);
   },
+  // hides a note: with the browser's own token (your own notes) or the admin password. Returns true if it went.
+  async remove(id, token) {
+    const r = await fetch(this.base('rpc/delete_note'), { method: 'POST', headers: this.headers(), body: JSON.stringify({ p_id: id, p_token: token }) });
+    if (!r.ok) throw new Error('remove ' + r.status);
+    return Number(await r.json()) > 0;
+  },
 };
+// every browser gets a token of its own; notes written here carry it, so they can be deleted from here without a password
+let visitorToken = '';
+try { visitorToken = localStorage.getItem('wlr-visitor') || ''; } catch (e) {}
+if (!visitorToken) {
+  visitorToken = (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join(''));
+  try { localStorage.setItem('wlr-visitor', visitorToken); } catch (e) {}
+}
 
 (async () => {
   try { db = await useCap('db'); user = await useCap('user'); } catch (e) { db = null; }
@@ -402,7 +415,7 @@ function openList() {
 function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
-  boardOpen = false; setStatus('');
+  boardOpen = false; askingFor = null; setStatus('');
   for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
@@ -516,7 +529,8 @@ grillForm.addEventListener('submit', async (e) => {
   grillBtn.disabled = false;
 });
 
-function canRemove(n) { if (dataMode === 'rest') return false; return dataMode === 'local' || isOwner || (myId && n.author === myId); }
+function canRemove(n) { if (dataMode === 'rest') return true; return dataMode === 'local' || isOwner || (myId && n.author === myId); }
+let askingFor = null;   // the note whose delete needs the admin password
 function renderBoard() {
   board.classList.toggle('bin', mode === 'bin');
   const list = mode === 'poster' ? wallNotes.filter((n) => n.poster === current.n) : binNotes;
@@ -546,21 +560,47 @@ function renderBoard() {
     const who = document.createElement('span'); who.textContent = '— ' + (n.sig || 'someone') + (n.at ? ' · ' + ago(n.at) : ''); meta.appendChild(who);
     if (canRemove(n)) {
       const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'rm';
-      rm.textContent = mode === 'poster' ? 'take down' : 'empty this';
+      rm.textContent = 'delete';
       rm.addEventListener('click', () => removeNote(n));
       meta.appendChild(rm);
     }
-    el.appendChild(meta); notesEl.appendChild(el);
+    el.appendChild(meta);
+    if (askingFor === n.id) {   // not this browser's note: the admin can still delete it with the password
+      const f = document.createElement('form'); f.className = 'pw'; f.noValidate = true;
+      const lab = document.createElement('span'); lab.textContent = 'Not yours. Admin password:';
+      const inp = document.createElement('input'); inp.type = 'password'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Admin password');
+      const go = document.createElement('button'); go.type = 'submit'; go.textContent = 'Delete';
+      const no = document.createElement('button'); no.type = 'button'; no.textContent = 'Cancel'; no.className = 'rm';
+      no.addEventListener('click', () => { askingFor = null; setStatus(''); renderBoard(); });
+      f.addEventListener('submit', (ev) => { ev.preventDefault(); removeNote(n, inp.value); });
+      f.append(lab, inp, go, no); el.appendChild(f);
+      setTimeout(() => inp.focus(), 30);
+    }
+    notesEl.appendChild(el);
   }
   const ro = (dataMode === 'db' && canWrite === false);
   sayForm.hidden = ro; swapBtn.hidden = ro; readonlyEl.hidden = !ro;
   if (ro) readonlyEl.textContent = 'You can read this ' + (mode === 'poster' ? 'wall' : 'bin') + ', but leaving a note needs a contributor invitation to this corner.';
   else if (dataMode === 'local' && !statusEl.textContent) setStatus('Not connected to the shared wall right now, so notes you leave stay on this screen.');
 }
-async function removeNote(n) {
+async function removeNote(n, password) {
   try {
-    if (dataMode === 'db') await db.doc((mode === 'poster' ? 'wall/' : 'bin/') + n.id).delete();
-    else { const arr = mode === 'poster' ? wallNotes : binNotes; const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1); G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setWishes(wallNotes.length); renderBoard(); }
+    if (dataMode === 'db') { await db.doc((mode === 'poster' ? 'wall/' : 'bin/') + n.id).delete(); return; }
+    if (dataMode === 'rest') {
+      const token = password !== undefined ? password.trim() : visitorToken;
+      const gone = token ? await rest.remove(n.id, token) : false;
+      if (!gone) {
+        if (password !== undefined) setStatus('That is not the admin password.');
+        else { askingFor = n.id; setStatus(''); renderBoard(); }
+        return;
+      }
+      askingFor = null;
+      await rest.load().catch(() => {});
+      setStatus(password !== undefined ? 'Deleted by the admin.' : 'Deleted.');
+      return;
+    }
+    const arr = mode === 'poster' ? wallNotes : binNotes; const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1);
+    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setWishes(wallNotes.length); renderBoard();
   } catch (e) { setStatus('Could not remove it (' + ((e && e.code) || 'error') + ').'); }
 }
 sayForm.addEventListener('submit', async (e) => {
