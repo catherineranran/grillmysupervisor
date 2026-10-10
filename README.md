@@ -69,13 +69,13 @@ The page speaks the Supabase REST API. To connect one:
      on public.notes for insert to anon with check (hidden = false);
    ```
 
-2. Put the project URL and the `anon` public key into the `BACKEND` constant near the top of the script in `index.html`:
+2. Put the project URL and the publishable (anon) key into the `BACKEND` constant near the top of the script in `index.html`:
 
    ```js
-   const BACKEND = { url: 'https://xxxx.supabase.co', key: 'eyJ…', table: 'notes' };
+   const BACKEND = { url: 'https://tmijmyemlecbyqtlrmbj.supabase.co', key: 'sb_publishable_…', table: 'notes' };
    ```
 
-The `anon` key is meant to be public; the row-level-security policies above are what limit what visitors can do (read notes that are not hidden, add notes within the length limits, nothing else).
+The publishable key is meant to be public; the row-level-security policies above are what limit what visitors can do (read notes that are not hidden, add notes within the length limits, nothing else).
 
 ### Moderation
 

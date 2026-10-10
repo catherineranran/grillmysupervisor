@@ -197,7 +197,7 @@ const isTouch = matchMedia('(pointer: coarse)').matches;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Shared-notes backend for the standalone website (filled in by the site build).
 // Inside claude.ai this stays empty and the artifact's own database is used instead.
-const BACKEND = { url: '', key: '', table: 'notes' };
+const BACKEND = { url: 'https://tmijmyemlecbyqtlrmbj.supabase.co', key: 'sb_publishable_gWXTdCa7EiSPx1BrsOC8QA_sf3Dle9M', table: 'notes' };
 
 // ---------- UI copy ----------
 const keys = document.getElementById('keys');
