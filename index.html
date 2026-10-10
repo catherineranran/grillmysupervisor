@@ -968,7 +968,7 @@ let gateHit;
   addBox(GX-0.1, GX+0.1, GZ-1.2, GZ-1.0); addBox(GX-0.1, GX+0.1, GZ+1.0, GZ+1.2);
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,320); sg.strokeStyle = '#8a6a48'; sg.strokeRect(7,7,1010,306); sg.fillStyle = '#2b3a2a'; sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 120); sg.font = '500 44px "DM Mono", ui-monospace, monospace'; sg.fillStyle = '#5d554d'; sg.fillText('alpacas this way · vibe-shepherding', 512, 230); st.needsUpdate = true; });
 }
-// alpacas: the herd from vibe-shepherding (CGTrader "Alpaca Animal" by Nyilonelycompany, shipped as an encrypted pack)
+// alpacas: the herd from vibe-shepherding (CGTrader "Alpaca Animal" by Nyilonelycompany, shipped as an encrypted pack, base64 text so static hosts serve it)
 const ALPACA_KEY = 'i/G4HOlP7aGXj99iwCZlkm0+WGp7bQqgC0Aql1dSt4s=';
 const alpacas = [];
 const MEADOW = {x0: -19.5, x1: -10.3, z0: -18, z1: 12};
@@ -986,8 +986,10 @@ function coatColor(){
 (async ()=>{
   if(!(window.crypto && crypto.subtle && THREE.GLTFLoader)) return;
   try{
-    const res = await fetch('assets/alpaca.pack'); if(!res.ok) return;
-    const buf = await res.arrayBuffer();
+    const res = await fetch('assets/alpaca.pack.txt'); if(!res.ok) return;
+    const b64 = (await res.text()).trim(), bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const buf = bytes.buffer;
     const raw = Uint8Array.from(atob(ALPACA_KEY), c=>c.charCodeAt(0));
     const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
     const plain = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:new Uint8Array(buf, 0, 12)}, key, new Uint8Array(buf, 12)));
