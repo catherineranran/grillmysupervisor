@@ -122,11 +122,13 @@ body.locked #cross{opacity:1}
 .note .meta{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-family:var(--mono);font-size:11px;color:var(--ink-soft);margin-top:6px}
 .note .rm{border:0;background:transparent;color:var(--ink-soft);font:400 11px var(--mono);cursor:pointer;text-decoration:underline;padding:0}
 #noteEmpty{font-size:14px;color:var(--ink-soft);padding:14px;border:1px dashed rgba(36,32,28,.3);border-radius:6px;text-align:center}
-#say{display:grid;gap:8px}
-#say textarea,#say input{font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
-#say textarea{resize:vertical;min-height:66px;width:100%;box-sizing:border-box}
-#say .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-#say input{flex:1 1 150px}
+#say,#wishForm{display:grid;gap:8px}
+#say textarea,#say input,#wishForm textarea,#wishForm input{font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
+#say textarea,#wishForm textarea{resize:vertical;min-height:66px;width:100%;box-sizing:border-box}
+#say .row,#wishForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#say input,#wishForm input{flex:1 1 150px}
+#wishBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
+#wishBtn:disabled{opacity:.55;cursor:default}
 #sayBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:var(--ink);color:#f7f4ef;white-space:nowrap}
 #sayBtn:disabled{opacity:.55;cursor:default}
 #board.bin #sayBtn{background:#4a4542}
@@ -240,6 +242,24 @@ body.locked #cross{opacity:1}
       <div id="grillStatus" class="status" aria-live="polite"></div>
     </form>
     <div id="grillRecent"></div>
+  </div>
+</div>
+
+<div id="wish" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="wishTitle">
+    <button class="close" data-close type="button" aria-label="Back to the hall">×</button>
+    <div class="eyebrow">Birthday wishes</div>
+    <h2 id="wishTitle">Make a wish for the supervisor</h2>
+    <p>It gets pinned on one of the posters along the wall, for everyone who walks past. <span id="wishCount"></span></p>
+    <form id="wishForm" novalidate>
+      <textarea id="wishText" rows="3" maxlength="200" placeholder="Happy birthday! I wish you…" aria-label="Your wish"></textarea>
+      <div class="row">
+        <input id="wishSig" type="text" maxlength="24" placeholder="Sign as (optional)" autocomplete="off" aria-label="Sign as">
+        <button id="wishBtn" type="submit">Pin it on the wall</button>
+      </div>
+      <div id="wishStatus" class="status" aria-live="polite"></div>
+    </form>
+    <button id="wishSee" class="linkish" type="button" hidden>See it on the poster →</button>
   </div>
 </div>
 

@@ -1,6 +1,6 @@
 # Where the Light Rests · grillmysupervisor.online
 
-A walkable, first-person gallery of sandstone and glass standing on the Ili grassland. Kind words get pinned on the posters above the sofas; complaints go in the one and only bin; on the terrace a grill cooks little avatar sausages that visitors add from the board beside it; alpacas graze on the meadow below.
+A walkable, first-person gallery of sandstone and glass standing on the Ili grassland. Birthday wishes written at the board inside the first door get pinned on the posters above the sofas (the emptiest poster first, nearest the board), kind words can be pinned on any poster directly; complaints go in the one and only bin; on the terrace a grill cooks little avatar sausages that visitors add from the board beside it; alpacas graze on the meadow below.
 
 Live at **https://grillmysupervisor.online** (GitHub Pages, deployed from the `main` branch).
 
@@ -13,7 +13,7 @@ The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flo
 | `page.html` | The page as written (full document). `index.html` is built from it with the notes backend filled in |
 | `index.html` | What the site serves |
 | `src/app.js` | Wires it all up: renderer, lights, the walk, posters and bin, shared notes, quality levels |
-| `src/gallery.js` | The gallery: corridor, glazing and its three doors, furniture, banner, posters, boards, decals, plants, the grill and its board, terrace, the trees along it, steps, bin, gate |
+| `src/gallery.js` | The gallery: corridor, glazing and its three doors, furniture, banner, posters, boards, decals, plants, the wish board, the grill and its board, terrace, the trees along it, steps, bin, gate |
 | `src/siteConst.js` | Where the gallery stands in the valley and the shape of its platform (shared by the JS and GLSL terrain) |
 | `src/*` (the rest) | The vibe-shepherding engine: `terrain`, `world`, `grass`, `flowers`, `scenery`, `rivers`, `sky`, `bees`, `audio`, `music*`, `post`, `flock`, `sheep*`, `config`, `tuning`, `noise*`, `shaders`, `materials` — lightly patched so the terrain is level under the platform and no grass grows on it |
 | `assets/` | Banner atlas, bow, logos, tulip, the supervisor's avatar (`avatar.png`) and its sausage wrap (`sausage.png`), `alpaca.pack.txt` (the encrypted alpaca model, base64) and the bleat recordings |

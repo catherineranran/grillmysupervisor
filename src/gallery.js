@@ -198,7 +198,7 @@ const T = {
   minerva: loadTex('assets/minerva.png'),
   mpiBoard: loadTex('assets/mpi-board.jpg'),
   sausage: loadTex('assets/sausage.png'),
-  avatar: loadTex('assets/avatar.png', {onLoad: () => { if(drawGrillBoard) drawGrillBoard(); }}),
+  avatar: loadTex('assets/avatar.png', {onLoad: () => { if(grillSign) grillSign.redraw(); if(wishSign) wishSign.redraw(); }}),
 };
 M.flag = cutoutMat(T.banner);
 M.bow = cutoutMat(T.bow);
@@ -673,7 +673,7 @@ let setGrill;
   }
   setGrill = function(n){
     for(let i=0;i<sausages.length;i++) sausages[i].visible = i < n;
-    grillBoard.count = n; if(drawGrillBoard) drawGrillBoard();
+    grillBoard.count = n; if(grillSign) grillSign.redraw();
   };
   const patty = new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7});
   for(const x of [-0.195, 0.195]) gg.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16), patty, x, Y+0.02, 0));
@@ -696,48 +696,80 @@ let setGrill;
   addBox(-5.75, -4.85, -6.65, -5.75);
 }
 
-// the sandwich board beside the grill: "Want to grill the supervisor?" — look at it and press E (or tap) to add a sausage
-const grillBoard = { count: 0 };
-let grillHit, drawGrillBoard;
-{
-  const bg = new THREE.Group(); bg.position.set(-5.0, 0, -4.75); bg.rotation.y = 0.25; world.add(bg);
-  const wood = new THREE.MeshStandardMaterial({color:0x5a4634, roughness:0.85});
+// sandwich boards: a canvas face on an A-frame; look at one and press E (or tap) to use it
+const boardWood = new THREE.MeshStandardMaterial({color:0x5a4634, roughness:0.85});
+function sandwichBoard(x, z, yaw, kind, paint){
+  const bg = new THREE.Group(); bg.position.set(x, 0, z); bg.rotation.y = yaw; world.add(bg);
   const W = 0.64, Hh = 0.84, tilt = 0.17;
   const bc = document.createElement('canvas'); bc.width = 640; bc.height = 840; const bx = bc.getContext('2d');
   const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = maxAniso;
-  drawGrillBoard = function(){
-    const n = grillBoard.count;
+  const redraw = () => {
     bx.fillStyle = '#f3ead8'; bx.fillRect(0,0,640,840);
     bx.strokeStyle = '#2b3a2a'; bx.lineWidth = 10; bx.strokeRect(5,5,630,830);
     bx.textAlign = 'center'; bx.textBaseline = 'middle';
-    bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('THE TERRACE GRILL', 320, 62);
-    bx.fillStyle = '#2b3a2a'; bx.font = '700 60px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-    bx.fillText('Want to grill', 320, 134); bx.fillText('the supervisor?', 320, 198);
-    const im = T.avatar.image;
-    if(im && im.complete && im.naturalWidth){ const h = 300, w = h*im.naturalWidth/im.naturalHeight; bx.drawImage(im, 320-w/2, 248, w, h); }
-    bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-    bx.fillText(n ? n + (n === 1 ? ' sausage' : ' sausages') + ' on the grill' : 'The grate is still empty', 320, 608);
-    bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
-    bx.fillText(isTouch ? 'tap here to add a sausage' : 'E / click here to add a sausage', 320, 676);
-    bx.font = '500 24px "DM Mono", ui-monospace, monospace'; bx.fillText('every sausage is a little him', 320, 736);
-    bt.needsUpdate = true;
+    paint(bx); bt.needsUpdate = true;
   };
-  drawGrillBoard();
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(drawGrillBoard);
+  redraw();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
   const faceMat = new THREE.MeshStandardMaterial({map:bt, roughness:0.9});
   const panelGeo = new THREE.PlaneGeometry(W, Hh), frameGeo = new THREE.BoxGeometry(W+0.06, Hh+0.06, 0.025);
   for(const s of [1, -1]){
     const pivot = new THREE.Group(); pivot.position.set(0, 0.95, 0); pivot.rotation.x = -s*tilt; bg.add(pivot);
-    pivot.add(mesh(frameGeo, wood, 0, -Hh/2-0.04, s*0.013));
+    pivot.add(mesh(frameGeo, boardWood, 0, -Hh/2-0.04, s*0.013));
     const face = new THREE.Mesh(panelGeo, faceMat); face.position.set(0, -Hh/2-0.04, s*0.027);
     if(s < 0) face.rotation.y = Math.PI;
     face.castShadow = true; face.receiveShadow = true; pivot.add(face);
   }
-  bg.add(mesh(new THREE.BoxGeometry(W+0.06, 0.045, 0.06), wood, 0, 0.96, 0));
-  grillHit = new THREE.Mesh(new THREE.BoxGeometry(W+0.1, 1.3, 0.5), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
-  grillHit.position.y = 0.65; grillHit.userData = {kind:'grill'}; bg.add(grillHit);
-  addBox(-5.36, -4.64, -5.0, -4.5);
+  bg.add(mesh(new THREE.BoxGeometry(W+0.06, 0.045, 0.06), boardWood, 0, 0.96, 0));
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(W+0.1, 1.3, 0.5), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+  hit.position.y = 0.65; hit.userData = {kind}; bg.add(hit);
+  addBox(x-0.36, x+0.36, z-0.25, z+0.25);
+  return { group: bg, hit, redraw };
 }
+function drawAvatar(bx, y, h){
+  const im = T.avatar.image;
+  if(im && im.complete && im.naturalWidth){ const w = h*im.naturalWidth/im.naturalHeight; bx.drawImage(im, 320-w/2, y, w, h); }
+}
+
+// beside the grill: "Want to grill the supervisor?" — adds a sausage
+const grillBoard = { count: 0 };
+const grillSign = sandwichBoard(-5.0, -4.75, 0.25, 'grill', (bx) => {
+  const n = grillBoard.count;
+  bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('THE TERRACE GRILL', 320, 62);
+  bx.fillStyle = '#2b3a2a'; bx.font = '700 60px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText('Want to grill', 320, 134); bx.fillText('the supervisor?', 320, 198);
+  drawAvatar(bx, 248, 300);
+  bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText(n ? n + (n === 1 ? ' sausage' : ' sausages') + ' on the grill' : 'The grate is still empty', 320, 608);
+  bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
+  bx.fillText(isTouch ? 'tap here to add a sausage' : 'E / click here to add a sausage', 320, 676);
+  bx.font = '500 24px "DM Mono", ui-monospace, monospace'; bx.fillText('every sausage is a little him', 320, 736);
+});
+const grillHit = grillSign.hit, drawGrillBoard = grillSign.redraw;
+
+// just past the first glass door, inside: "Make a wish for the supervisor" — the wish gets pinned on a poster
+const wishBoard = { count: 0 };
+const confetti = []; { let sd = 11; const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+  const cols = ['#e9a23b', '#c94f3d', '#5a8fd6', '#6aa84f', '#d46aa3', '#f2d16b'];
+  for(let i=0;i<34;i++) confetti.push({ x: 20 + r()*600, y: 14 + r()*820, s: 4 + r()*6, c: cols[(r()*cols.length)|0], a: r()*Math.PI }); }
+const wishSign = sandwichBoard(-0.95, -2.7, 0.15, 'wish', (bx) => {
+  const n = wishBoard.count;
+  for(const c of confetti){ bx.save(); bx.translate(c.x, c.y); bx.rotate(c.a); bx.fillStyle = c.c; bx.globalAlpha = 0.85; bx.fillRect(-c.s/2, -c.s/3, c.s, c.s*0.66); bx.restore(); }
+  bx.globalAlpha = 1;
+  bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('BIRTHDAY WISHES', 320, 62);
+  bx.fillStyle = '#2b3a2a'; bx.font = '700 60px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText('Make a wish', 320, 134); bx.fillText('for the supervisor', 320, 198);
+  drawAvatar(bx, 246, 290);
+  bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText(n ? n + (n === 1 ? ' wish' : ' wishes') + ' on the wall' : 'No wishes on the wall yet', 320, 598);
+  bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
+  bx.fillText(isTouch ? 'tap here to write one' : 'E / click here to write one', 320, 666);
+  bx.font = '500 23px "DM Mono", ui-monospace, monospace';
+  bx.fillText('it gets pinned on one of the posters', 320, 726); bx.fillText('along the wall', 320, 760);
+});
+const wishHit = wishSign.hit;
+function setWishes(n){ wishBoard.count = n; wishSign.redraw(); }
+
 function tickSmoke(dt){
   for(const sp of smoke){
     sp.userData.t += dt*0.22; if(sp.userData.t > 1) sp.userData.t -= 1;
@@ -910,8 +942,8 @@ redrawPosters([], true); updateBin(0);
 
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
-  groundY, redrawPosters, updateBin, setGrill, tickSmoke, M, T,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit]),
+  groundY, redrawPosters, updateBin, setGrill, setWishes, tickSmoke, M, T,
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit]),
   XG, XW, Z0, Z1, H, L,
 };
 }

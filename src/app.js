@@ -34,10 +34,10 @@ const $ = (id) => document.getElementById(id);
 // ---------- UI copy ----------
 const keys = $('keys'), hint = $('hint');
 if (isTouch) {
-  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
+  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to write a wish or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
   hint.innerHTML = '<b>Left thumb</b> walks · <b>right thumb</b> looks · <b>tap</b> a poster';
 } else {
-  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
+  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, write a wish at the board, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
   hint.innerHTML = '<b>Click</b> the scene to look · <b>WASD</b> walk · <b>E</b> read a poster · <b>P</b> all posters · <b>Esc</b> free cursor';
 }
 
@@ -270,6 +270,7 @@ function setHover(obj) {
     promptEl.innerHTML = hover.userData.kind === 'poster' ? '<b>' + key + '</b> · read the notes, leave a kind word'
       : hover.userData.kind === 'gate' ? '<b>' + key + '</b> · the gate to the herding grounds'
       : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
+      : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · make a birthday wish — it goes up on the wall'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -285,7 +286,8 @@ let mode = 'poster', current = null;
 let db = null, user = null, myId = null, isOwner = false, canWrite = null, dataMode = 'loading';
 let wallNotes = [], binNotes = [], grillNotes = [];
 const grillPanel = $('grill'), grillForm = $('grillForm'), grillSig = $('grillSig'), grillBtn = $('grillBtn'), grillStatus = $('grillStatus'), grillCount = $('grillCount'), grillRecent = $('grillRecent');
-try { grillSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
+const wishPanel = $('wish'), wishForm = $('wishForm'), wishText = $('wishText'), wishSig = $('wishSig'), wishBtn = $('wishBtn'), wishStatus = $('wishStatus'), wishCount = $('wishCount'), wishSee = $('wishSee');
+try { grillSig.value = wishSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 try { saySig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 
 const useCap = (name) => (window.claude && typeof window.claude.use === 'function') ? window.claude.use(name) : Promise.resolve(null);
@@ -322,10 +324,11 @@ const rest = {
     wallNotes = rows.filter((x) => x && x.kind === 'wall').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     binNotes = rows.filter((x) => x && x.kind === 'bin').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     grillNotes = rows.filter((x) => x && x.kind === 'grill').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length);
+    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length);
     if (boardOpen && !board.hidden) renderBoard();
     if (!listPanel.hidden) renderList();
     if (!grillPanel.hidden) renderGrill();
+    if (!wishPanel.hidden) renderWish();
   },
   async loadTitles() {
     try {
@@ -356,7 +359,8 @@ const rest = {
   dataMode = 'db';
   db.collection('wall').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     wallNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
-    G.redrawPosters(wallNotes, false); if (boardOpen && !board.hidden) renderBoard(); if (!listPanel.hidden) renderList();
+    G.redrawPosters(wallNotes, false); G.setWishes(wallNotes.length);
+    if (boardOpen && !board.hidden) renderBoard(); if (!listPanel.hidden) renderList(); if (!wishPanel.hidden) renderWish();
   }, (err) => { setStatus('The wall stopped updating (' + err.code + '). Reload to reconnect.'); });
   db.collection('bin').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     binNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
@@ -382,6 +386,7 @@ function openBoard(obj) {
   if (boardOpen) return;
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
+  if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
   else { mode = 'bin'; current = null; }
   openPanel(board); setStatus('');
@@ -398,7 +403,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -425,7 +430,61 @@ $('mSound').addEventListener('click', () => {
   $('mSound').innerHTML = 'Sound <b>' + (on ? 'off' : 'on') + '</b>';
 });
 for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', closeBoard);
-for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+
+// one place that stores a note, whichever backend is in use
+async function saveNote(kind, doc) {
+  if (dataMode === 'db') await db.collection(kind).add(doc);
+  else if (dataMode === 'rest') { await rest.add(kind, doc); await rest.load().catch(() => {}); }
+  else {
+    const n = Object.assign({ id: 'local-' + Date.now() }, clean(doc));
+    (kind === 'wall' ? wallNotes : kind === 'bin' ? binNotes : grillNotes).unshift(n);
+    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length);
+  }
+}
+
+// ---------- the wish board ----------
+// a wish is a wall note; it goes on the emptiest poster, the nearest such to the board first, so the wall fills evenly
+const WISH_Z = -2.7;
+function posterForWish() {
+  const counts = posters.map((p) => wallNotes.filter((n) => n.poster === p.n).length);
+  const min = Math.min(...counts);
+  return posters.filter((p, i) => counts[i] === min).reduce((a, b) => Math.abs(b.z - WISH_Z) < Math.abs(a.z - WISH_Z) ? b : a);
+}
+let lastWishPoster = null;
+function renderWish() {
+  const n = wallNotes.length;
+  wishCount.textContent = n === 0 ? 'The wall is waiting for the first one.' : n === 1 ? 'One wish is up so far.' : n + ' wishes are up so far.';
+  const ro = (dataMode === 'db' && canWrite === false);
+  wishForm.hidden = ro;
+  if (ro) wishStatus.textContent = 'Leaving a wish needs a contributor invitation to this corner.';
+  else if (dataMode === 'local' && !wishStatus.textContent) wishStatus.textContent = 'Not connected to the shared wall right now, so your wish stays on this screen.';
+}
+wishForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = wishText.value.trim(), sig = wishSig.value.trim();
+  if (!text) { wishStatus.textContent = 'Write your wish first.'; wishText.focus(); return; }
+  if (dataMode === 'loading') { wishStatus.textContent = 'Still connecting to the wall. Try again in a moment.'; return; }
+  const target = posterForWish();
+  const doc = { poster: target.n, text, sig, author: myId, at: new Date().toISOString() };
+  wishBtn.disabled = true; wishStatus.textContent = 'Pinning…';
+  try {
+    await saveNote('wall', doc);
+    wishText.value = ''; lastWishPoster = target; renderWish();
+    wishStatus.textContent = 'Pinned on poster No. ' + target.n + (target.title ? ' (“' + posterTitle(target) + '”)' : '') + '. Walk the hall to find it, or press P for the list.';
+    wishSee.hidden = false;
+    try { localStorage.setItem('wlr-sig', sig); } catch (err) {}
+  } catch (err) {
+    console.warn('wish not saved', err);
+    if (err && err.code === 'invalid_argument') { canWrite = false; renderWish(); }
+    else wishStatus.textContent = err && err.code === 'quota_exceeded' ? 'The wall is full. Nothing more fits.' : 'Could not pin it. Try once more.';
+  }
+  wishBtn.disabled = false;
+});
+wishSee.addEventListener('click', () => {
+  if (!lastWishPoster) return;
+  wishPanel.hidden = true; mode = 'poster'; current = lastWishPoster; board.hidden = false; setStatus(''); renderBoard();
+});
 
 // ---------- the grill ----------
 function renderGrill() {
@@ -445,9 +504,7 @@ grillForm.addEventListener('submit', async (e) => {
   const doc = { text: '🌭', sig, author: myId, at: new Date().toISOString() };
   grillBtn.disabled = true; grillStatus.textContent = 'Putting it on…';
   try {
-    if (dataMode === 'db') await db.collection('grill').add(doc);
-    else if (dataMode === 'rest') { await rest.add('grill', doc); await rest.load().catch(() => {}); }
-    else { grillNotes.unshift(Object.assign({ id: 'local-' + Date.now() }, clean(doc))); G.setGrill(grillNotes.length); }
+    await saveNote('grill', doc);
     renderGrill();
     grillStatus.textContent = 'On the grill. Sizzling.';
     try { localStorage.setItem('wlr-sig', sig); } catch (err) {}
@@ -503,7 +560,7 @@ function renderBoard() {
 async function removeNote(n) {
   try {
     if (dataMode === 'db') await db.doc((mode === 'poster' ? 'wall/' : 'bin/') + n.id).delete();
-    else { const arr = mode === 'poster' ? wallNotes : binNotes; const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1); G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); renderBoard(); }
+    else { const arr = mode === 'poster' ? wallNotes : binNotes; const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1); G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setWishes(wallNotes.length); renderBoard(); }
   } catch (e) { setStatus('Could not remove it (' + ((e && e.code) || 'error') + ').'); }
 }
 sayForm.addEventListener('submit', async (e) => {
@@ -516,9 +573,8 @@ sayForm.addEventListener('submit', async (e) => {
   if (mode === 'poster') doc.poster = current.n;
   sayBtn.disabled = true; setStatus(mode === 'poster' ? 'Pinning…' : 'Tossing…');
   try {
-    if (dataMode === 'db') await db.collection(mode === 'poster' ? 'wall' : 'bin').add(doc);
-    else if (dataMode === 'rest') { await rest.add(mode === 'poster' ? 'wall' : 'bin', doc); await rest.load().catch(() => {}); }
-    else { const n = Object.assign({ id: 'local-' + Date.now() }, clean(doc)); if (mode === 'poster') wallNotes.unshift(n); else binNotes.unshift(n); G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); renderBoard(); }
+    await saveNote(mode === 'poster' ? 'wall' : 'bin', doc);
+    if (dataMode === 'local') renderBoard();
     sayText.value = '';
     setStatus(mode === 'poster' ? 'Pinned. Everyone who walks past will see it.' : 'In the bin. Only the curious will find it.');
     try { localStorage.setItem('wlr-sig', sig); } catch (err) {}
