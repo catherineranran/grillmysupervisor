@@ -47,6 +47,8 @@ const vec2 SITE_C = vec2(${f(SITE.cx)}, ${f(SITE.cz)});
 const vec2 SITE_R = vec2(${f(SITE.cos)}, ${f(SITE.sin)});
 const vec4 SITE_RECT = vec4(${f(SITE.rect.x0)}, ${f(SITE.rect.x1)}, ${f(SITE.rect.z0)}, ${f(SITE.rect.z1)});
 const vec4 SITE_STAIR = vec4(${f(SITE.stair.x0)}, ${f(SITE.stair.x1)}, ${f(SITE.stair.z0)}, ${f(SITE.stair.z1)});
+// the grass keeps off the steps themselves (the terrain notch above is a little wider)
+const vec4 SITE_STEPS = vec4(-10.45, -7.95, -4.35, -2.25);
 uniform float uSiteH0;
 vec2 siteLocal(vec2 p) {
   vec2 d = p - SITE_C;
@@ -56,8 +58,15 @@ vec2 siteLocal(vec2 p) {
 float siteMask(vec2 p) {
   vec2 l = siteLocal(p);
   float onRect = step(SITE_RECT.x - 0.4, l.x) * step(l.x, SITE_RECT.y + 0.4) * step(SITE_RECT.z - 0.4, l.y) * step(l.y, SITE_RECT.w + 0.4);
-  float onStair = step(SITE_STAIR.x, l.x) * step(l.x, SITE_STAIR.y) * step(SITE_STAIR.z, l.y) * step(l.y, SITE_STAIR.w);
+  float onStair = step(SITE_STEPS.x, l.x) * step(l.x, SITE_STEPS.y) * step(SITE_STEPS.z, l.y) * step(l.y, SITE_STEPS.w);
   return max(onRect, onStair);
+}
+// how far outside the platform a point lies (0 on it)
+float siteOut(vec2 p) {
+  vec2 l = siteLocal(p);
+  float ox = max(max(SITE_RECT.x - l.x, l.x - SITE_RECT.y), 0.0);
+  float oz = max(max(SITE_RECT.z - l.y, l.y - SITE_RECT.w), 0.0);
+  return length(vec2(ox, oz));
 }
 float siteHeight(vec2 p, float natural) {
   vec2 l = siteLocal(p);

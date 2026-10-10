@@ -54,7 +54,7 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{
   z-index:5;
 }
 #intro .card{position:relative;max-width:440px;width:100%;padding:28px 26px 24px;display:grid;gap:14px}
-#intro h1{margin:0;font-size:clamp(30px,7vw,42px);line-height:1.02;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+#intro h1{margin:0;font-size:clamp(22px,6.6vw,36px);line-height:1.04;font-weight:700;letter-spacing:-.02em;text-wrap:balance;overflow-wrap:anywhere}
 #intro p{margin:0;font-size:15px;line-height:1.5;color:var(--ink-soft);max-width:38ch}
 #intro p.aside{font-size:13px;max-width:46ch}
 #intro dl{margin:4px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-family:var(--mono);font-size:12px}
@@ -141,6 +141,15 @@ body.locked #cross{opacity:1}
 #plist .t{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #plist .c{font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
 
+#grill .grillRow{display:flex;gap:14px;align-items:center}
+#grill img{width:84px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 3px rgba(36,32,28,.25))}
+#grillForm{display:grid;gap:8px}
+#grillForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#grillForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
+#grillBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
+#grillBtn:disabled{opacity:.55;cursor:default}
+.status{font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--ink-soft);min-height:1.5em}
+#grillRecent{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink-soft)}
 #credits dl{margin:0;display:grid;gap:10px;font-size:13px;line-height:1.5}
 #credits dt{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
 #credits dd{margin:0;color:var(--ink)}
@@ -162,8 +171,8 @@ body.locked #cross{opacity:1}
 <div id="joy"><i></i></div>
 
 <div id="suncard" class="panel">
-  <div class="row"><label for="sun">Sun</label><output id="sunOut">15:30</output></div>
-  <input id="sun" type="range" min="0" max="1000" value="750" aria-label="Time of day">
+  <div class="row"><label for="sun">Time</label><output id="sunOut">15:30</output></div>
+  <input id="sun" type="range" min="0" max="1440" value="930" step="5" aria-label="Time of day">
 </div>
 
 <div id="hint" class="panel" aria-live="polite"></div>
@@ -214,6 +223,26 @@ body.locked #cross{opacity:1}
   </div>
 </div>
 
+<div id="grill" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="grillTitle">
+    <button class="close" data-close type="button" aria-label="Back to the terrace">×</button>
+    <div class="eyebrow">The terrace grill</div>
+    <h2 id="grillTitle">Want to grill the supervisor?</h2>
+    <div class="grillRow">
+      <img id="grillPic" src="assets/avatar.png" alt="" width="84" height="104">
+      <p>Every sausage on the grate is a little him. <span id="grillCount">Nobody has put one on yet.</span></p>
+    </div>
+    <form id="grillForm" novalidate>
+      <div class="row">
+        <input id="grillSig" type="text" maxlength="24" placeholder="Sign as (optional)" autocomplete="off" aria-label="Sign as">
+        <button id="grillBtn" type="submit">Add a sausage</button>
+      </div>
+      <div id="grillStatus" class="status" aria-live="polite"></div>
+    </form>
+    <div id="grillRecent"></div>
+  </div>
+</div>
+
 <div id="board" class="overlay" hidden>
   <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="boardTitle">
     <button class="close" data-close type="button" aria-label="Back to the hall">×</button>
@@ -235,11 +264,11 @@ body.locked #cross{opacity:1}
 
 <div id="intro">
   <div class="card panel">
-    <div class="eyebrow">Ranran’s private corner</div>
-    <h1>Where the Light Rests</h1>
+    <div class="eyebrow">Happy birthday to our dear supervisor,<br>hereby as a gift,</div>
+    <h1>welcome to Grillmysupervisor.online!</h1>
     <p>Walk the length of a sandstone-and-glass gallery while the sun lays mullion shadows across the oak floor.</p>
     <dl id="keys"></dl>
-    <p class="aside">The glass door by the first sofa opens onto the terrace; steps lead down to the Ili grassland, where the alpacas graze by the stream.</p>
+    <p class="aside">Three glass doors open onto the terrace, where the grill is waiting; by the first door, steps lead down to the Ili grassland, where the alpacas graze by the stream.</p>
     <button id="enter" type="button"><span class="dot"></span>Step inside</button>
   </div>
 </div>

@@ -2,7 +2,8 @@
 // built in its own local coordinates inside a group placed on the platform (see siteConst.js).
 import * as THREE from 'three';
 import { withClouds } from './materials.js';
-import { SITE } from './siteConst.js';
+import { SITE, toWorld } from './siteConst.js';
+import { heightAt } from './terrain.js';
 
 export function buildGallery({ scene, maxAniso, isTouch }) {
 const g = new THREE.Group();
@@ -175,7 +176,7 @@ M.banana = alphaLeafMat(bananaTex);
 // image assets published next to the page
 const texLoader = new THREE.TextureLoader();
 function loadTex(url, opts){
-  const t = texLoader.load(url);
+  const t = texLoader.load(url, opts && opts.onLoad);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
   if(opts && opts.repeat){ t.wrapS = t.wrapT = THREE.RepeatWrapping; }
   return t;
@@ -196,6 +197,8 @@ const T = {
   tulip: loadTex('assets/tulip.png'),
   minerva: loadTex('assets/minerva.png'),
   mpiBoard: loadTex('assets/mpi-board.jpg'),
+  sausage: loadTex('assets/sausage.png'),
+  avatar: loadTex('assets/avatar.png', {onLoad: () => { if(drawGrillBoard) drawGrillBoard(); }}),
 };
 M.flag = cutoutMat(T.banner);
 M.bow = cutoutMat(T.bow);
@@ -214,11 +217,15 @@ const world = g;
 woodTex.repeat.set(4/1.6, L/1.6);
 const floor = mesh(new THREE.PlaneGeometry(4, L), M.floor, 0, 0, ZC, false, true);
 floor.rotation.x = -Math.PI/2; world.add(floor);
-// the glass door bay near the start (opening between DOOR.z1 and DOOR.z0), and the steps down from the terrace
-const DOOR = {z0: -0.3, z1: -1.5, h: 2.3, angle: 0, target: 0};
+// the glass doors in the window wall, each centred in a bay between two mullions (pitch 2.85 from Z0-0.4) and
+// swinging out onto the terrace: one near the start, with the steps down beside it, and two more along the hall
+const DOORS = [[22.5, 21.3], [-0.3, -1.5], [-37.3, -38.5]].map(([z0, z1]) => ({z0, z1, h: 2.3, angle: 0, target: 0, pivot: null}));
+const DOOR = DOORS[1];   // the one by the steps
 const STAIR = {z0: -2.3, z1: -4.3, top: -8.0, bottom: -10.4};
-// floor grille along glass, split around the door
-for(const [za, zb] of [[Z0, DOOR.z0], [DOOR.z1, Z1]]){
+// the stretches of glass wall between the doors
+const BAYS = []; { let za = Z0; for(const d of DOORS){ BAYS.push([za, d.z0]); za = d.z1; } BAYS.push([za, Z1]); }
+// floor grille along glass, split around the doors
+for(const [za, zb] of BAYS){
   const len = za - zb, gt = grilleTex.clone(); gt.needsUpdate = true; gt.repeat.set(1, len/0.25);
   const gr = mesh(new THREE.PlaneGeometry(0.28, len), new THREE.MeshStandardMaterial({map:gt, roughness:0.5, metalness:0.4}), XG+0.22, 0.004, (za+zb)/2, false, true);
   gr.rotation.x = -Math.PI/2; world.add(gr);
@@ -244,27 +251,28 @@ world.add(mesh(new THREE.BoxGeometry(1.2, 2.4, 0.05), M.door, 0.6, 1.2, Z1+0.02,
 world.add(mesh(new THREE.BoxGeometry(0.03, 0.25, 0.06), M.chrome, 0.1, 1.05, Z1+0.05, false, false));
 
 // glazing
-for(const [za, zb] of [[Z0, DOOR.z0], [DOOR.z1, Z1]]) world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, za-zb), M.frame, XG, 0.035, (za+zb)/2));
+for(const [za, zb] of BAYS) world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, za-zb), M.frame, XG, 0.035, (za+zb)/2));
 world.add(mesh(new THREE.BoxGeometry(0.26, 0.16, L), M.frame, XG, H-0.08, ZC));
 function glassPane(za, zb, y0, y1){
   const g = new THREE.Mesh(new THREE.PlaneGeometry(za-zb, y1-y0), M.glass);
   g.rotation.y = Math.PI/2; g.position.set(XG, (y0+y1)/2, (za+zb)/2); g.renderOrder = 2; world.add(g);
 }
-glassPane(Z0, DOOR.z0, 0, H); glassPane(DOOR.z1, Z1, 0, H); glassPane(DOOR.z0, DOOR.z1, DOOR.h+0.08, H);
-// door frame and the leaf, hinged on the far post, swinging out to the terrace
-let doorPivot;
-{
-  for(const z of [DOOR.z0, DOOR.z1]) world.add(mesh(new THREE.BoxGeometry(0.2, DOOR.h+0.1, 0.09), M.frame, XG, (DOOR.h+0.1)/2, z));
-  world.add(mesh(new THREE.BoxGeometry(0.2, 0.1, DOOR.z0-DOOR.z1+0.09), M.frame, XG, DOOR.h+0.04, (DOOR.z0+DOOR.z1)/2));
-  doorPivot = new THREE.Group(); doorPivot.position.set(XG, 0, DOOR.z1); world.add(doorPivot);
-  const w = DOOR.z0 - DOOR.z1 - 0.1, leaf = new THREE.Group(); leaf.position.z = 0.05; doorPivot.add(leaf);
-  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w-0.1, DOOR.h-0.14), M.glass); pane.rotation.y = Math.PI/2; pane.position.set(0, DOOR.h/2, w/2); pane.renderOrder = 2; leaf.add(pane);
-  for(const z of [0.03, w-0.03]) leaf.add(mesh(new THREE.BoxGeometry(0.05, DOOR.h-0.02, 0.06), M.frame, 0, DOOR.h/2, z));
-  for(const y of [0.03, DOOR.h-0.05]) leaf.add(mesh(new THREE.BoxGeometry(0.05, 0.06, w), M.frame, 0, y, w/2));
+for(const [za, zb] of BAYS) glassPane(za, zb, 0, H);
+for(const d of DOORS) glassPane(d.z0, d.z1, d.h+0.08, H);
+// each door: frame and the leaf, hinged on the far post, swinging out to the terrace
+for(const D of DOORS){
+  for(const z of [D.z0, D.z1]) world.add(mesh(new THREE.BoxGeometry(0.2, D.h+0.1, 0.09), M.frame, XG, (D.h+0.1)/2, z));
+  world.add(mesh(new THREE.BoxGeometry(0.2, 0.1, D.z0-D.z1+0.09), M.frame, XG, D.h+0.04, (D.z0+D.z1)/2));
+  const pivot = new THREE.Group(); pivot.position.set(XG, 0, D.z1); world.add(pivot); D.pivot = pivot;
+  const w = D.z0 - D.z1 - 0.1, leaf = new THREE.Group(); leaf.position.z = 0.05; pivot.add(leaf);
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w-0.1, D.h-0.14), M.glass); pane.rotation.y = Math.PI/2; pane.position.set(0, D.h/2, w/2); pane.renderOrder = 2; leaf.add(pane);
+  for(const z of [0.03, w-0.03]) leaf.add(mesh(new THREE.BoxGeometry(0.05, D.h-0.02, 0.06), M.frame, 0, D.h/2, z));
+  for(const y of [0.03, D.h-0.05]) leaf.add(mesh(new THREE.BoxGeometry(0.05, 0.06, w), M.frame, 0, y, w/2));
   leaf.add(mesh(new THREE.BoxGeometry(0.05, 0.3, w), M.frame, 0, 0.17, w/2));
   for(const x of [-0.06, 0.06]) leaf.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 10), M.chrome, x, 1.05, w-0.14));
   for(const x of [-0.06, 0.06]) for(const y of [0.9, 1.2]) leaf.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.06, 6), M.chrome, x/2, y, w-0.14, false, false));
 }
+const doorPivot = DOOR.pivot;
 const mullGeo = new THREE.BoxGeometry(0.2, H, 0.075);
 const finGeo = new THREE.BoxGeometry(0.06, H, 0.04);
 for(let z = Z0 - 0.4; z > Z1; z -= 2.85){
@@ -275,8 +283,8 @@ for(let z = Z0 - 0.4; z > Z1; z -= 2.85){
 
 // ---------- outside ----------
 // terrace
-paveTex.repeat.set(6/2.4, (L+10)/1.2);
-const terrace = mesh(new THREE.PlaneGeometry(6, L+10), M.pave, XG-3.0, -0.02, ZC, false, true);
+paveTex.repeat.set(7.1/2.4, (L+10)/1.2);
+const terrace = mesh(new THREE.PlaneGeometry(7.1, L+10), M.pave, XG-3.55, -0.02, ZC, false, true);   // out to the retaining wall
 terrace.rotation.x = -Math.PI/2; world.add(terrace);
 // planter wall with ivy
 planterTex.repeat.set((L+10)/2.75, 1/2.75);
@@ -316,6 +324,53 @@ for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1-5]]){
     col.setHSL(rr(0.22,0.3), rr(0.3,0.5), rr(0.18,0.32)); ivy.setColorAt(i, col);
   }
   ivy.castShadow = true; ivy.receiveShadow = true; ivy.frustumCulled = false; world.add(ivy);
+}
+
+// ---------- the trees along the terrace (the gallery's own, from its first version) ----------
+// airy yellow-green crowns standing on the meadow just beyond the retaining wall; their feet follow the valley floor
+M.bark = new THREE.MeshStandardMaterial({color:0x6f665c, roughness:0.95});
+const TREES = [
+  {x:-12.4,z:1.8,h:11,r:4.2}, {x:-13.5,z:-15,h:9.5,r:3.6}, {x:-11,z:-27,h:10.5,r:4},
+  {x:-14,z:-39,h:12,r:4.4}, {x:-11.8,z:-52,h:9,r:3.5}, {x:-13,z:-64,h:11,r:4}, {x:-12,z:9,h:10,r:3.8},
+  {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-12.5,z:-76,h:10,r:3.8},
+];
+{
+  const clumpGeo = new THREE.IcosahedronGeometry(0.26, 0);
+  const per = 1300, n = TREES.length*per;
+  const leaves = new THREE.InstancedMesh(clumpGeo, new THREE.MeshStandardMaterial({flatShading:true, roughness:0.9}), n);
+  const d = new THREE.Object3D(), col = new THREE.Color();
+  const palette = [0xb7ad5a, 0xcabb6c, 0x9c9b4c, 0xd6c57a, 0x87903f, 0xbfae62];
+  let idx = 0;
+  for(const t of TREES){
+    const [wx, wz] = toWorld(t.x, t.z);
+    const ground = t.ground = heightAt(wx, wz) - SITE.H0 - 0.12;   // the foot sinks a little into the turf
+    const trunkH = t.h*0.55;
+    world.add(mesh(new THREE.CylinderGeometry(0.13, 0.26, trunkH, 8), M.bark, t.x, ground+trunkH/2, t.z));
+    const cy = ground + t.h*0.62;
+    for(let b=0;b<7;b++){
+      const len = rr(2,3.6), a = rand()*Math.PI*2, tilt = rr(0.4,0.9);
+      const br = mesh(new THREE.CylinderGeometry(0.04, 0.1, len, 6), M.bark, 0,0,0);
+      br.geometry.translate(0, len/2, 0);
+      br.position.set(t.x, ground+trunkH*rr(0.7,1), t.z);
+      br.rotation.set(Math.sin(a)*tilt, 0, Math.cos(a)*tilt);
+      world.add(br);
+    }
+    for(let i=0;i<per;i++){
+      // airy crown: points in an ellipsoid, biased to the shell
+      let x,y,z; do{ x=rr(-1,1); y=rr(-1,1); z=rr(-1,1);} while(x*x+y*y+z*z>1);
+      const k = 0.55 + 0.45*Math.pow(rand(),0.4);
+      const len = Math.hypot(x,y,z)||1;
+      x = x/len*k; y = y/len*k; z = z/len*k;
+      d.position.set(t.x + x*t.r, cy + y*t.h*0.36, t.z + z*t.r);
+      const s = rr(0.5, 1.15); d.scale.set(s, s*rr(0.7,1.1), s);
+      d.rotation.set(rand()*3, rand()*3, rand()*3); d.updateMatrix();
+      leaves.setMatrixAt(idx, d.matrix);
+      col.set(palette[(rand()*palette.length)|0]); col.offsetHSL(rr(-0.02,0.02), 0, rr(-0.06,0.05));
+      leaves.setColorAt(idx, col);
+      idx++;
+    }
+  }
+  leaves.castShadow = true; leaves.receiveShadow = true; leaves.frustumCulled = false; world.add(leaves);
 }
 
 
@@ -577,6 +632,7 @@ for(const z of [20, -16, -38, -60]) banner(z, 2.7, 2.5, 0.3, 0.78);
 
 // ---------- the grill on the terrace ----------
 const smoke = [];
+let setGrill;
 {
   const gg = new THREE.Group(); gg.position.set(-5.3, 0, -6.2); gg.rotation.y = 0.5; world.add(gg);
   const black = new THREE.MeshStandardMaterial({color:0x1d1c1b, roughness:0.45, metalness:0.35});
@@ -594,11 +650,33 @@ const smoke = [];
   const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 28), new THREE.MeshStandardMaterial({color:0x3a2a22, emissive:0xff5a1a, emissiveIntensity:0.9, roughness:1}));
   coals.rotation.x = -Math.PI/2; coals.position.y = Y - 0.12; gg.add(coals);
   for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 6), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; gg.add(bar); }
-  // what's cooking
-  const sausage = new THREE.MeshStandardMaterial({color:0x8d4a2e, roughness:0.6});
-  for(let i=0;i<4;i++){ const s = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.15, 10), sausage, -0.12 + i*0.075, Y+0.03, 0.02); s.rotation.x = Math.PI/2; s.rotation.z = rr(-0.1,0.1); gg.add(s); }
-  gg.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.025, 16), new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7}), 0.13, Y+0.02, -0.12));
-  gg.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.025, 16), new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7}), 0.12, Y+0.02, 0.13));
+  // what's cooking: little avatar sausages — the supervisor, in cartoon, wrapped round each one. Visitors add them
+  // from the board beside the grill; up to 16 show on the grate (two layers), the board carries the full count.
+  const SR = 0.033, SL = 0.10;
+  const sausageSide = new THREE.MeshStandardMaterial({map:T.sausage, roughness:0.55});
+  const sausageEnd = new THREE.MeshStandardMaterial({color:0x9c4a2a, roughness:0.55});
+  const sideGeo = new THREE.CylinderGeometry(SR, SR, SL, 24, 1, true);
+  const capGeo = new THREE.SphereGeometry(SR, 16, 10, 0, Math.PI*2, 0, Math.PI/2);
+  const slots = [];
+  for(let layer=0; layer<2; layer++) for(let row=0; row<2; row++) for(let i=0;i<4;i++){
+    const a = (-0.115 + i*0.077) * (layer ? 1 : 1), b = (row ? 0.088 : -0.088);
+    slots.push(layer ? {x:b, z:a, y:Y+SR+0.004+2*SR*0.82, yaw:Math.PI/2} : {x:a, z:b, y:Y+SR+0.004, yaw:0});
+  }
+  const sausages = [];
+  for(const s of slots){
+    const g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.set(0, s.yaw + rr(-0.12,0.12), 0);
+    const body = new THREE.Group(); body.rotation.x = Math.PI/2; g.add(body);     // the axis along z, the wrap's middle facing up
+    body.add(mesh(sideGeo, sausageSide, 0, 0, 0));
+    const c1 = mesh(capGeo, sausageEnd, 0, SL/2, 0); body.add(c1);
+    const c2 = mesh(capGeo, sausageEnd, 0, -SL/2, 0); c2.rotation.x = Math.PI; body.add(c2);
+    g.visible = false; gg.add(g); sausages.push(g);
+  }
+  setGrill = function(n){
+    for(let i=0;i<sausages.length;i++) sausages[i].visible = i < n;
+    grillBoard.count = n; if(drawGrillBoard) drawGrillBoard();
+  };
+  const patty = new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7});
+  for(const x of [-0.195, 0.195]) gg.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16), patty, x, Y+0.02, 0));
   // legs, wheels, ash pan
   for(const [ax, az, wheel] of [[-0.6, 0.8, true], [-0.6, -0.8, true], [1, 0, false]]){
     const leg = mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.56, 8), steel, ax*0.2, Y-R-0.1, az*0.2);
@@ -616,6 +694,49 @@ const smoke = [];
     sp.userData.t = i/7; gg.add(sp); smoke.push(sp);
   }
   addBox(-5.75, -4.85, -6.65, -5.75);
+}
+
+// the sandwich board beside the grill: "Want to grill the supervisor?" — look at it and press E (or tap) to add a sausage
+const grillBoard = { count: 0 };
+let grillHit, drawGrillBoard;
+{
+  const bg = new THREE.Group(); bg.position.set(-5.0, 0, -4.75); bg.rotation.y = 0.25; world.add(bg);
+  const wood = new THREE.MeshStandardMaterial({color:0x5a4634, roughness:0.85});
+  const W = 0.64, Hh = 0.84, tilt = 0.17;
+  const bc = document.createElement('canvas'); bc.width = 640; bc.height = 840; const bx = bc.getContext('2d');
+  const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = maxAniso;
+  drawGrillBoard = function(){
+    const n = grillBoard.count;
+    bx.fillStyle = '#f3ead8'; bx.fillRect(0,0,640,840);
+    bx.strokeStyle = '#2b3a2a'; bx.lineWidth = 10; bx.strokeRect(5,5,630,830);
+    bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('THE TERRACE GRILL', 320, 62);
+    bx.fillStyle = '#2b3a2a'; bx.font = '700 60px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    bx.fillText('Want to grill', 320, 134); bx.fillText('the supervisor?', 320, 198);
+    const im = T.avatar.image;
+    if(im && im.complete && im.naturalWidth){ const h = 300, w = h*im.naturalWidth/im.naturalHeight; bx.drawImage(im, 320-w/2, 248, w, h); }
+    bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    bx.fillText(n ? n + (n === 1 ? ' sausage' : ' sausages') + ' on the grill' : 'The grate is still empty', 320, 608);
+    bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
+    bx.fillText(isTouch ? 'tap here to add a sausage' : 'E / click here to add a sausage', 320, 676);
+    bx.font = '500 24px "DM Mono", ui-monospace, monospace'; bx.fillText('every sausage is a little him', 320, 736);
+    bt.needsUpdate = true;
+  };
+  drawGrillBoard();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(drawGrillBoard);
+  const faceMat = new THREE.MeshStandardMaterial({map:bt, roughness:0.9});
+  const panelGeo = new THREE.PlaneGeometry(W, Hh), frameGeo = new THREE.BoxGeometry(W+0.06, Hh+0.06, 0.025);
+  for(const s of [1, -1]){
+    const pivot = new THREE.Group(); pivot.position.set(0, 0.95, 0); pivot.rotation.x = -s*tilt; bg.add(pivot);
+    pivot.add(mesh(frameGeo, wood, 0, -Hh/2-0.04, s*0.013));
+    const face = new THREE.Mesh(panelGeo, faceMat); face.position.set(0, -Hh/2-0.04, s*0.027);
+    if(s < 0) face.rotation.y = Math.PI;
+    face.castShadow = true; face.receiveShadow = true; pivot.add(face);
+  }
+  bg.add(mesh(new THREE.BoxGeometry(W+0.06, 0.045, 0.06), wood, 0, 0.96, 0));
+  grillHit = new THREE.Mesh(new THREE.BoxGeometry(W+0.1, 1.3, 0.5), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+  grillHit.position.y = 0.65; grillHit.userData = {kind:'grill'}; bg.add(grillHit);
+  addBox(-5.36, -4.64, -5.0, -4.5);
 }
 function tickSmoke(dt){
   for(const sp of smoke){
@@ -645,6 +766,7 @@ M.step = new THREE.MeshStandardMaterial({color:0xcbc3b5, roughness:0.9});
   addBox(-9.1, STAIR.top, STAIR.z0, Z0+5); addBox(-9.1, STAIR.top, Z1-5, STAIR.z1);
   addBox(STAIR.bottom, STAIR.top, STAIR.z0, STAIR.z0+0.15); addBox(STAIR.bottom, STAIR.top, STAIR.z1-0.15, STAIR.z1);
 }
+for(const t of TREES) addBox(t.x-0.32, t.x+0.32, t.z-0.32, t.z+0.32);   // the trunks
 
 // the gate to the Ili grassland (a separate world: vibe-shepherding)
 let gateHit;
@@ -656,19 +778,23 @@ let gateHit;
   const leaf = new THREE.Group(); leaf.position.set(0, 0, -1.02); leaf.rotation.y = 0.9; gg.add(leaf);
   for(let i=0;i<6;i++) leaf.add(mesh(new THREE.BoxGeometry(0.03, 1.1 + (i%2)*0.1, 0.09), wood, 0, 0.62, 0.12 + i*0.33));
   for(const y of [0.35, 0.95]) leaf.add(mesh(new THREE.BoxGeometry(0.035, 0.07, 1.95), wood, 0.03, y, 1.0));
-  const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 320; const sg = sc.getContext('2d');
-  sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,320); sg.strokeStyle = '#8a6a48'; sg.lineWidth = 14; sg.strokeRect(7,7,1010,306);
-  sg.fillStyle = '#2b3a2a'; sg.textAlign = 'center'; sg.textBaseline = 'middle';
-  sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 120);
-  sg.font = '500 44px "DM Mono", ui-monospace, monospace'; sg.fillStyle = '#5d554d'; sg.fillText('alpacas this way · vibe-shepherding', 512, 230);
-  const st = new THREE.CanvasTexture(sc); st.encoding = THREE.sRGBEncoding; st.anisotropy = maxAniso;
-  const sign = mesh(new THREE.PlaneGeometry(1.6, 0.5), new THREE.MeshStandardMaterial({map:st, roughness:0.9, side:THREE.DoubleSide}), 0.02, 2.62, 0, true, true);
+  const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 400; const sg = sc.getContext('2d');
+  function drawSign(){
+    sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,400); sg.strokeStyle = '#8a6a48'; sg.lineWidth = 14; sg.strokeRect(7,7,1010,386);
+    sg.textAlign = 'center'; sg.textBaseline = 'middle';
+    sg.fillStyle = '#2b3a2a'; sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 112);
+    sg.fillStyle = '#5d554d'; sg.font = '500 40px "DM Mono", ui-monospace, monospace';
+    sg.fillText('Ranran raises these cute alpacas', 512, 232); sg.fillText('as she vibe-shepherds everyday', 512, 300);
+  }
+  drawSign();
+  const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace; st.anisotropy = maxAniso;
+  const sign = mesh(new THREE.PlaneGeometry(1.6, 0.625), new THREE.MeshStandardMaterial({map:st, roughness:0.9, side:THREE.DoubleSide}), 0.02, 2.69, 0, true, true);
   sign.rotation.y = Math.PI/2; gg.add(sign);
-  gg.add(mesh(new THREE.BoxGeometry(0.1, 0.1, 1.9), wood, 0, 2.95, 0));
+  gg.add(mesh(new THREE.BoxGeometry(0.1, 0.1, 1.9), wood, 0, 3.06, 0));
   gateHit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.2, 2.6), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
   gateHit.position.y = 1.6; gateHit.userData = {kind:'gate'}; gg.add(gateHit);
   addBox(GX-0.1, GX+0.1, GZ-1.2, GZ-1.0); addBox(GX-0.1, GX+0.1, GZ+1.0, GZ+1.2);
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ sg.fillStyle = '#f1e9d8'; sg.fillRect(0,0,1024,320); sg.strokeStyle = '#8a6a48'; sg.strokeRect(7,7,1010,306); sg.fillStyle = '#2b3a2a'; sg.font = '700 96px "Bricolage Grotesque", ui-sans-serif, sans-serif'; sg.fillText('ILI GRASSLAND  →', 512, 120); sg.font = '500 44px "DM Mono", ui-monospace, monospace'; sg.fillStyle = '#5d554d'; sg.fillText('alpacas this way · vibe-shepherding', 512, 230); st.needsUpdate = true; });
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ drawSign(); st.needsUpdate = true; });
 }
 
 // ---------- the one and only bin ----------
@@ -783,9 +909,9 @@ redrawPosters([], true); updateBin(0);
 
 
 return {
-  group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, STAIR, BIN, binMat,
-  groundY, redrawPosters, updateBin, tickSmoke, M, T,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit]),
+  group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
+  groundY, redrawPosters, updateBin, setGrill, tickSmoke, M, T,
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit]),
   XG, XW, Z0, Z1, H, L,
 };
 }

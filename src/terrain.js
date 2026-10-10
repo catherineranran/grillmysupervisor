@@ -185,7 +185,11 @@ void main() {
     float softL = mix(uToonEdge.y, 0.55, smoothstep(200.0, 2000.0, dist));
     float lightT = ss * clamp(dot(Nl, uSunDir) * 1.4, 0.0, 1.0);
     float root = mix(0.55, 1.0, smoothstep(5.0, 26.0, dist));
+    // the lawn round the gallery is kept mown: no dark roots, and its shadows stay readable beside the pale steps
+    float siteNear = 1.0 - smoothstep(0.0, 12.0, siteOut(vWorld.xz));
+    root = mix(root, 1.0, siteNear);
     vec3 toon = toonGrassSoft(lightT, cs, (vnoise(p * 0.08 + 3.1) - 0.5) * 1.2, root, softL);
+    toon = mix(toon, max(toon, uToonLight * 0.5), siteNear * 0.7);
     // 高山草甸：同一套颜色，稍暗一些
     toon *= 1.0 - 0.2 * smoothstep(160.0, 260.0, h);
     col = mix(col, toon, uToonMix * meadow);

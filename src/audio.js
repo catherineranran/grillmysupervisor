@@ -326,7 +326,7 @@ export class Soundscape {
     const T = this.tuning.sound;
     const now = ctx.currentTime;
     const set = (param, v, tc = 0.15) => param.setTargetAtTime(v, now, tc);
-    set(this.master.gain, T.master);
+    set(this.master.gain, T.master * (this.ambience ?? 1), 0.3);   // ambience: 0 inside the gallery, 1 out on the grass (app.js)
     for (const k of Object.keys(this.bus)) set(this.bus[k].gain, k === 'music' && !this.musicOn ? 0 : T[k] ?? 0, 0.2);
 
     // 听者跟着相机

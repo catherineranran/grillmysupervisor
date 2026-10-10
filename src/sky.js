@@ -15,6 +15,8 @@ void main() {
 const frag = /* glsl */ `
 ${COMMON}
 uniform vec3 uSunGlow;
+uniform float uSkyDim;
+uniform float uStars;
 varying vec3 vDir;
 
 float fbm5(vec2 p) {
@@ -46,8 +48,18 @@ void main() {
     float n2 = fbm5(uv + drift + normalize(uSunDir.xz) * 0.05);
     cover = cloudMaskAt(n) * smoothstep(0.5, 0.72, d.y);
     float lit = clamp(0.6 + (n - n2) * 6.0, 0.0, 1.0);
-    vec3 cc = mix(vec3(0.62, 0.67, 0.78), vec3(1.0), lit) / uExposure;
+    vec3 cc = mix(vec3(0.62, 0.67, 0.78), vec3(1.0), lit) / uExposure * uSkyDim;
     col = mix(col, cc, cover);
+  }
+
+  // stars, only once the sky has gone dark (uStars rises with the night); a hashed grid over the dome
+  if (uStars > 0.001 && d.y > 0.0) {
+    vec2 suv = vec2(atan(d.z, d.x) * 52.0, asin(d.y) * 52.0);
+    vec2 cell = floor(suv), f = fract(suv);
+    float rnd = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+    vec2 cen = vec2(fract(sin(dot(cell + 1.3, vec2(269.5, 183.3))) * 43758.5453), fract(sin(dot(cell + 2.7, vec2(419.2, 371.9))) * 43758.5453));
+    float star = smoothstep(0.09, 0.0, length(f - cen)) * step(0.975, rnd) * (0.5 + 0.5 * rnd);
+    col += vec3(0.85, 0.9, 1.0) * star * 2.2 * uStars * smoothstep(0.0, 0.12, d.y) * (1.0 - cover);
   }
 
   // 日轮：很亮（会被辉光晕开），不随曝光换算
@@ -61,6 +73,8 @@ export function createSky(U) {
     uniforms: {
       ...U,
       uSunGlow: { value: new THREE.Color(PALETTE.sunGlow) },
+      uSkyDim: { value: 1 },    // clouds dim with the daylight
+      uStars: { value: 0 },     // stars come out at night
     },
     vertexShader: vert,
     fragmentShader: frag,

@@ -105,10 +105,12 @@ const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
 const G = buildGallery({ scene, maxAniso: renderer.capabilities.getMaxAnisotropy(), isTouch });
-const { posters, colliders, DOOR, STAIR, BIN, XG, XW, Z0, Z1 } = G;
+const { posters, colliders, DOORS, STAIR, BIN, TREES, XG, XW, Z0, Z1 } = G;
 { // the retaining wall around the platform keeps you on it (except down the steps), and off it from below
   const R = SITE.rect, t = 0.3;
   colliders.push({ minX: R.x1, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z1 + t });
+  colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: R.z0 - t, maxZ: STAIR.z1 });   // glass side, in two pieces around the steps
+  colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: STAIR.z0, maxZ: R.z1 + t });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z0 });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z1, maxZ: R.z1 + t });
   colliders.push({ minX: XG - 0.3, maxX: XW + 0.3, minZ: Z0, maxZ: Z0 + 0.25 });   // the corridor's end walls
@@ -116,10 +118,12 @@ const { posters, colliders, DOOR, STAIR, BIN, XG, XW, Z0, Z1 } = G;
 }
 
 // ---------- the flock ----------
-// the alpacas keep off the platform (a row of round obstacles stands in for it) and gather on the meadow below the steps
+// the alpacas keep off the platform (a row of round obstacles stands in for it) and away from the terrace trees,
+// and gather on the meadow below the steps. These round obstacles are for the flock only; you walk by the box colliders.
 const obstacles = [];
 const platformObstacles = [];
 for (let z = SITE.rect.z0 - 2; z <= SITE.rect.z1 + 2; z += 9) { const [wx, wz] = toWorld(-3.2, z); platformObstacles.push({ x: wx, z: wz, r: 10.5 }); }
+for (const t of TREES) { const [wx, wz] = toWorld(t.x, t.z); platformObstacles.push({ x: wx, z: wz, r: 0.7 }); }
 const MEADOW_SPOT = toWorld(-21, 4);
 let flock = null;
 const herdCtx = { cx: MEADOW_SPOT[0], cz: MEADOW_SPOT[1], fx: 0, fz: 1, cam: camera.position, frustum: new THREE.Frustum() };
@@ -142,7 +146,6 @@ const EYE = 1.62, R = 0.28;
 const keysDown = new Set();
 let boardOpen = false, hover = null;
 const sunInput = $('sun'), sunOut = $('sunOut');
-let sunT = 0.75;
 
 function groundLocal(lx, lz) {
   if (onPlatform(lx, lz) || onStairs(lx, lz)) return G.groundY(lx, lz);
@@ -158,8 +161,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyP') { openList(); return; }
   keysDown.add(e.code);
   if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-    sunT = THREE.MathUtils.clamp(sunT + (e.code === 'BracketRight' ? 0.02 : -0.02), 0, 1);
-    sunInput.value = Math.round(sunT * 1000); setSun(sunT);
+    const m = THREE.MathUtils.clamp(clockMins + (e.code === 'BracketRight' ? 20 : -20), 0, 1440);
+    sunInput.value = m; setClock(m);
   }
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
@@ -266,6 +269,7 @@ function setHover(obj) {
     const key = isTouch ? 'Tap' : 'Click or E';
     promptEl.innerHTML = hover.userData.kind === 'poster' ? '<b>' + key + '</b> · read the notes, leave a kind word'
       : hover.userData.kind === 'gate' ? '<b>' + key + '</b> · the gate to the herding grounds'
+      : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -279,7 +283,9 @@ const statusEl = $('status'), swapBtn = $('swap');
 const gatePanel = $('gate'), listPanel = $('plist'), creditsPanel = $('credits');
 let mode = 'poster', current = null;
 let db = null, user = null, myId = null, isOwner = false, canWrite = null, dataMode = 'loading';
-let wallNotes = [], binNotes = [];
+let wallNotes = [], binNotes = [], grillNotes = [];
+const grillPanel = $('grill'), grillForm = $('grillForm'), grillSig = $('grillSig'), grillBtn = $('grillBtn'), grillStatus = $('grillStatus'), grillCount = $('grillCount'), grillRecent = $('grillRecent');
+try { grillSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 try { saySig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 
 const useCap = (name) => (window.claude && typeof window.claude.use === 'function') ? window.claude.use(name) : Promise.resolve(null);
@@ -315,9 +321,11 @@ const rest = {
     if (!Array.isArray(rows)) throw new Error('load shape');
     wallNotes = rows.filter((x) => x && x.kind === 'wall').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     binNotes = rows.filter((x) => x && x.kind === 'bin').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length);
+    grillNotes = rows.filter((x) => x && x.kind === 'grill').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
+    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length);
     if (boardOpen && !board.hidden) renderBoard();
     if (!listPanel.hidden) renderList();
+    if (!grillPanel.hidden) renderGrill();
   },
   async loadTitles() {
     try {
@@ -354,6 +362,10 @@ const rest = {
     binNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
     G.updateBin(binNotes.length); if (boardOpen && !board.hidden) renderBoard();
   }, (err) => { setStatus('The bin stopped updating (' + err.code + '). Reload to reconnect.'); });
+  db.collection('grill').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
+    grillNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
+    G.setGrill(grillNotes.length); if (!grillPanel.hidden) renderGrill();
+  }, () => {});
   db.collection('posters').limit(100).onSnapshot((snap) => {
     applyTitles(snap.docs.map((d) => ({ n: d.id, title: (d.data() || {}).title })));
   }, () => {});
@@ -369,6 +381,7 @@ function openPanel(el) {
 function openBoard(obj) {
   if (boardOpen) return;
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
+  if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
   else { mode = 'bin'; current = null; }
   openPanel(board); setStatus('');
@@ -385,7 +398,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -412,7 +425,39 @@ $('mSound').addEventListener('click', () => {
   $('mSound').innerHTML = 'Sound <b>' + (on ? 'off' : 'on') + '</b>';
 });
 for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', closeBoard);
-for (const el of [board, gatePanel, listPanel, creditsPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+
+// ---------- the grill ----------
+function renderGrill() {
+  const n = grillNotes.length;
+  grillCount.textContent = n === 0 ? 'Nobody has put one on yet — be the first.' : n === 1 ? 'One is on the grate so far.' : n + ' are on the grate so far' + (n > 16 ? ' (16 fit on it at a time).' : '.');
+  const who = grillNotes.slice(0, 8).map((x) => x.sig || 'someone');
+  grillRecent.textContent = who.length ? 'Latest from: ' + who.join(', ') : '';
+  const ro = (dataMode === 'db' && canWrite === false);
+  grillForm.hidden = ro;
+  if (ro) grillStatus.textContent = 'Adding a sausage needs a contributor invitation to this corner.';
+  else if (dataMode === 'local' && !grillStatus.textContent) grillStatus.textContent = 'Not connected to the shared grill right now, so your sausage stays on this screen.';
+}
+grillForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (dataMode === 'loading') { grillStatus.textContent = 'Still connecting to the grill. Try again in a moment.'; return; }
+  const sig = grillSig.value.trim();
+  const doc = { text: '🌭', sig, author: myId, at: new Date().toISOString() };
+  grillBtn.disabled = true; grillStatus.textContent = 'Putting it on…';
+  try {
+    if (dataMode === 'db') await db.collection('grill').add(doc);
+    else if (dataMode === 'rest') { await rest.add('grill', doc); await rest.load().catch(() => {}); }
+    else { grillNotes.unshift(Object.assign({ id: 'local-' + Date.now() }, clean(doc))); G.setGrill(grillNotes.length); }
+    renderGrill();
+    grillStatus.textContent = 'On the grill. Sizzling.';
+    try { localStorage.setItem('wlr-sig', sig); } catch (err) {}
+  } catch (err) {
+    console.warn('sausage not saved', err);
+    if (err && err.code === 'invalid_argument') { canWrite = false; renderGrill(); }
+    else grillStatus.textContent = 'Could not put it on. Try once more.';
+  }
+  grillBtn.disabled = false;
+});
 
 function canRemove(n) { if (dataMode === 'rest') return false; return dataMode === 'local' || isOwner || (myId && n.author === myId); }
 function renderBoard() {
@@ -491,26 +536,80 @@ swapBtn.addEventListener('click', () => {
   setStatus(''); renderBoard();
 });
 
-// ---------- the sun ----------
-// the slider is a time of day: it swings the sun along the glass side of the gallery and lifts it at midday
-function setSun(t) {
-  const az = -80 + 47 * t, el = 10 + 32 * Math.sin(Math.PI * t);
-  sunFromAngles(el, az);
-  U.uSunDir.value.copy(SUN_DIR);
-  const warm = Math.pow(1 - Math.sin(Math.PI * t), 2.2);
-  const lampGlow = 0.6 + 0.9 * warm;
-  for (const l of G.lampLights) { l.light.intensity = 9 * lampGlow; l.mat.emissiveIntensity = 0.6 * lampGlow; }
-  const mins = Math.round(8 * 60 + t * 600);
-  sunOut.textContent = String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+// ---------- the clock ----------
+// The slider is a time of day, 00:00–24:00. The sun rises at six along the glass side of the gallery, peaks at one
+// and sets at eight; the moon takes over at night. The whole look (sky, grass, forest, alpacas, fog) is blended
+// between three tunings — night, dusk and the daytime look from tuning.json — and pushed through applyTuning.
+const LOOK_DAY = tuning;
+const LOOK_NIGHT = {
+  sky: { sun: 0.32, skyLight: 0.14, zenith: '#060a18', horizon: '#141c30', band: 0.26, haze: 0.4 },
+  grass: { light: '#2b3a4e', lightDeep: '#1f2a3a', shadow: '#111826' },
+  forest: { lit: '#25303e', shade: '#141a28' },
+  sheep: { light: '#8e98ad', shadow: '#3a4255' },
+  water: { color: '#0d1620', lake: '#15253a', glitterColor: '#cfd8ff' },
+};
+const LOOK_DUSK = {
+  sky: { sun: 1.5, skyLight: 0.4, zenith: '#324b86', horizon: '#f0a978', band: 0.4, haze: 0.6 },
+  grass: { light: '#a89d52', lightDeep: '#75703a', shadow: '#3b4a4a' },
+  forest: { lit: '#6b6a4c', shade: '#3f4762' },
+  sheep: { light: '#f5dfc4', shadow: '#8b8a8e' },
+  water: { color: '#1d3a44', lake: '#3a5a86', glitterColor: '#ffb470' },
+};
+const SUN_WARM = new THREE.Color('#fff5e6'), SUN_LOW = new THREE.Color('#ffb070'), MOON = new THREE.Color('#9fb4ff');
+const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+function mixHex(a, b, k) { return '#' + _c1.set(a).lerp(_c2.set(b), k).getHexString(); }
+function blendLook(a, b, k) {   // a is the full tuning; b overrides a few colours and numbers
+  const out = JSON.parse(JSON.stringify(a));
+  for (const sec of Object.keys(b)) for (const key of Object.keys(b[sec])) {
+    const va = a[sec][key], vb = b[sec][key];
+    out[sec][key] = typeof vb === 'string' ? mixHex(va, vb, k) : va + (vb - va) * k;
+  }
+  return out;
 }
-setSun(sunT);
-sunInput.addEventListener('input', () => { sunT = sunInput.value / 1000; setSun(sunT); });
+let cur = tuning, clockMins = 930, lampK = 0, dayK = 1;
+function setClock(mins) {
+  clockMins = mins;
+  const h = mins / 60;
+  // the sun: up from 06:00 to 20:00, highest at 13:00; the moon: up from 19:00 to 07:00, highest at 01:00
+  const sunEl = 44 * Math.sin(Math.PI * (h - 6) / 14);          // negative below the horizon
+  const hm = (h + 5) % 24;   // 0 at 19:00
+  const moonEl = 36 * Math.sin(Math.PI * hm / 12);
+  const sunAz = -117.6 + 4.7 * h, moonAz = -112 + 4.7 * hm;
+  dayK = THREE.MathUtils.smoothstep(sunEl, -9, 10);
+  const dusk = Math.exp(-Math.pow(sunEl / 6, 2)) * 0.9;
+  const night = 1 - dayK;
+  // which light carries the shadows: the sun while it is up, the moon otherwise
+  const useMoon = sunEl < 1 && moonEl > sunEl;
+  cur = blendLook(LOOK_DAY, LOOK_NIGHT, night);
+  cur = blendLook(cur, LOOK_DUSK, dusk * (1 - night * 0.7));
+  cur.sky.elevation = Math.max(useMoon ? moonEl : sunEl, 1.5);
+  cur.sky.azimuth = useMoon ? moonAz : sunAz;
+  applyTuning(U, cur);
+  // the light's colour: warm sun, orange when it is low, blue moonlight at night
+  const lightCol = useMoon ? MOON : _c1.copy(SUN_WARM).lerp(SUN_LOW, THREE.MathUtils.clamp(1 - sunEl / 18, 0, 1));
+  U.uSunColor.value.copy(lightCol).multiplyScalar(cur.sky.sun);
+  sun.color.copy(lightCol);
+  hemi.color.set(cur.sky.zenith).lerp(_c2.set(cur.sky.horizon), 0.5);
+  hemi.groundColor.set(0xcdbfa9).multiplyScalar(0.35 + 0.65 * dayK);
+  scene.fog.color.copy(U.uFogColor.value);
+  sky.material.uniforms.uSkyDim.value = 0.12 + 0.88 * dayK;
+  sky.material.uniforms.uStars.value = THREE.MathUtils.clamp((-sunEl - 3) / 9, 0, 1);
+  sky.material.uniforms.uSunGlow.value.set(useMoon ? '#c8d4ff' : PALETTE.sunGlow);
+  // the standing lamps burn from 18:00 to 06:00
+  lampK = h >= 12 ? THREE.MathUtils.clamp(h - 17.5, 0, 1) : THREE.MathUtils.clamp(6.5 - h, 0, 1);
+  for (const l of G.lampLights) { l.light.intensity = 11 * lampK; l.mat.emissiveIntensity = 0.9 * lampK; }
+  sunOut.textContent = String(Math.floor(mins / 60) % 24).padStart(2, '0') + ':' + String(Math.round(mins % 60)).padStart(2, '0');
+}
+setClock(clockMins);
+sunInput.addEventListener('input', () => setClock(Number(sunInput.value)));
 
 // ---------- walking ----------
 function collide() {
-  const inDoorZ = player.z > DOOR.z1 + R && player.z < DOOR.z0 - R;
-  if (inDoorZ && DOOR.angle < -1.1) {
-    if (Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, DOOR.z1 + R, DOOR.z0 - R);
+  // the glass wall, except through a door that has swung open
+  let through = null;
+  for (const d of DOORS) if (d.angle < -1.1 && player.z > d.z1 + R && player.z < d.z0 - R) { through = d; break; }
+  if (through) {
+    if (Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, through.z1 + R, through.z0 - R);
   } else if (player.x >= XG && onPlatform(player.x, player.z)) player.x = Math.max(player.x, XG + 0.24 + R);
   else if (onPlatform(player.x, player.z)) player.x = Math.min(player.x, XG - 0.24 - R);
   if (player.x > XG && player.x < XW) player.z = THREE.MathUtils.clamp(player.z, Z1 + R, Z0 - R);
@@ -524,11 +623,11 @@ function collide() {
       if (i === 0) player.x = minX; else if (i === 1) player.x = maxX; else if (i === 2) player.z = minZ; else player.z = maxZ;
     }
   }
-  // trees (world coordinates)
-  if (!onPlatform(player.x, player.z)) {
+  // the valley's spruces (world coordinates); the platform's own round obstacles are for the flock, not for you
+  if (!onPlatform(player.x, player.z) && !onStairs(player.x, player.z)) {
     let [wx, wz] = toWorld(player.x, player.z);
     let moved = false;
-    for (const o of obstacles) {
+    for (const o of world.obstacles) {
       const dx = wx - o.x, dz = wz - o.z, d = Math.hypot(dx, dz), min = o.r + R;
       if (d < min && d > 1e-4) { wx = o.x + (dx / d) * min; wz = o.z + (dz / d) * min; moved = true; }
     }
@@ -624,15 +723,16 @@ function watchLevel(gap, dt) {
 
 const clock = new THREE.Clock();
 const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), tmp = new THREE.Vector3(), projScreen = new THREE.Matrix4();
-let lastFrame = 0, first = true;
+let lastFrame = 0, first = true, ambience = 0;
 const veil = $('veil');
 
 function frame() {
+  if (window.__prof) window.__prof.frames = (window.__prof.frames || 0) + 1;   // headless test hook
   const dt = Math.min(clock.getDelta(), 0.05);
   const time = (U.uTime.value += dt);
   cloudUniforms.uTime.value = time;
-  sun.intensity = tuning.sky.sun * Math.PI * GALLERY_SUN;
-  hemi.intensity = tuning.sky.skyLight * Math.PI * GALLERY_SKY;
+  sun.intensity = cur.sky.sun * Math.PI * GALLERY_SUN * (0.45 + 0.55 * dayK);
+  hemi.intensity = cur.sky.skyLight * Math.PI * GALLERY_SKY * (0.5 + 0.5 * dayK);
 
   // walk
   let mf = 0, ms = 0;
@@ -667,12 +767,20 @@ function frame() {
   herdCtx.frustum.setFromProjectionMatrix(projScreen);
   setHover((boardOpen || !intro.hidden) ? null : pick(0, 0));
 
-  // the glass door opens itself when you come near
-  const dd = Math.hypot(player.x - XG, player.z - (DOOR.z0 + DOOR.z1) / 2);
-  DOOR.target = dd < 2.6 ? -1.55 : 0;
-  DOOR.angle += THREE.MathUtils.clamp(DOOR.target - DOOR.angle, -2.4 * dt, 2.4 * dt);
-  G.doorPivot.rotation.y = DOOR.angle;
+  // the glass doors open themselves when you come near
+  for (const d of DOORS) {
+    const dd = Math.hypot(player.x - XG, player.z - (d.z0 + d.z1) / 2);
+    d.target = dd < 2.6 ? -1.55 : 0;
+    d.angle += THREE.MathUtils.clamp(d.target - d.angle, -2.4 * dt, 2.4 * dt);
+    d.pivot.rotation.y = d.angle;
+  }
   G.tickSmoke(dt);
+
+  // the valley's sounds belong to the valley: silent in the gallery and on the terrace, fading in on the way down the steps
+  const outdoors = onPlatform(player.x, player.z) ? 0
+    : onStairs(player.x, player.z) ? THREE.MathUtils.clamp((STAIR.top - player.x) / (STAIR.top - STAIR.bottom), 0, 1) : 1;
+  ambience += (outdoors - ambience) * Math.min(1, dt * 2.5);
+  sound.ambience = ambience;
 
   // the valley around the camera
   U.uCenter.value.copy(camera.position);
@@ -713,5 +821,5 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOOR, __G: G, __cam: camera });
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));
