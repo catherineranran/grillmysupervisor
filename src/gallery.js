@@ -577,7 +577,7 @@ let signHit, setSignatures;
 {
   const c = document.createElement('canvas'); c.width = 2048; c.height = 1280; const g2 = c.getContext('2d');
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
-  const mat = new THREE.MeshStandardMaterial({map:tex, roughness:0.85});
+  const mat = new THREE.MeshStandardMaterial({map:tex, roughness:0.85, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.3});   // lit like a notice board, so the colours stay bright in the shade and at night
   let names = [];
   let sd = 5; const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
   const dots = []; for(let i=0;i<140;i++) dots.push({x:r()*2048, y:r()*1280, s:5+r()*9, c:SIGN_COLORS[(r()*SIGN_COLORS.length)|0], a:r()*Math.PI, k:r()});
