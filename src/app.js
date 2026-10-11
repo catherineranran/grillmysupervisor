@@ -34,10 +34,10 @@ const $ = (id) => document.getElementById(id);
 // ---------- UI copy ----------
 const keys = $('keys'), hint = $('hint');
 if (isTouch) {
-  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to write a wish or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
+  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, wish or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
   hint.innerHTML = '<b>Left thumb</b> walks · <b>right thumb</b> looks · <b>tap</b> a poster';
 } else {
-  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, write a wish at the board, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
+  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, write a wish, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
   hint.innerHTML = '<b>Click</b> the scene to look · <b>WASD</b> walk · <b>E</b> read a poster · <b>P</b> all posters · <b>Esc</b> free cursor';
 }
 
@@ -256,7 +256,7 @@ function pick(nx, ny, far = false) {
   return hits.length ? hits[0].object : null;
 }
 function highlight(obj, on) {
-  const m = obj.userData.kind === 'poster' ? obj.material : (obj.userData.kind === 'bin' ? G.binMat : null);
+  const m = obj.userData.kind === 'poster' || obj.userData.kind === 'sign' ? obj.material : (obj.userData.kind === 'bin' ? G.binMat : null);
   if (!m) return;
   m.emissive.setHex(on ? 0xffc27a : 0x000000); m.emissiveIntensity = on ? 0.16 : 0;
 }
@@ -271,6 +271,7 @@ function setHover(obj) {
       : hover.userData.kind === 'gate' ? '<b>' + key + '</b> · the gate to the herding grounds'
       : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
       : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · make a birthday wish — it goes up on the wall'
+      : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -284,7 +285,8 @@ const statusEl = $('status'), swapBtn = $('swap');
 const gatePanel = $('gate'), listPanel = $('plist'), creditsPanel = $('credits');
 let mode = 'poster', current = null;
 let db = null, user = null, myId = null, isOwner = false, canWrite = null, dataMode = 'loading';
-let wallNotes = [], binNotes = [], grillNotes = [];
+let wallNotes = [], binNotes = [], grillNotes = [], signNotes = [];
+const signPanel = $('signp'), signForm = $('signForm'), signName = $('signName'), signBtn = $('signBtn'), signStatus = $('signStatus'), signCount = $('signCount'), signList = $('signList');
 const grillPanel = $('grill'), grillForm = $('grillForm'), grillSig = $('grillSig'), grillBtn = $('grillBtn'), grillStatus = $('grillStatus'), grillCount = $('grillCount'), grillRecent = $('grillRecent');
 const wishPanel = $('wish'), wishForm = $('wishForm'), wishText = $('wishText'), wishSig = $('wishSig'), wishBtn = $('wishBtn'), wishStatus = $('wishStatus'), wishCount = $('wishCount'), wishSee = $('wishSee');
 try { grillSig.value = wishSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
@@ -324,11 +326,13 @@ const rest = {
     wallNotes = rows.filter((x) => x && x.kind === 'wall').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     binNotes = rows.filter((x) => x && x.kind === 'bin').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     grillNotes = rows.filter((x) => x && x.kind === 'grill').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length);
+    signNotes = rows.filter((x) => x && x.kind === 'sign').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
+    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length); G.setSignatures(signNotes);
     if (boardOpen && !board.hidden && !askingFor) renderBoard();
     if (!listPanel.hidden) renderList();
     if (!grillPanel.hidden) renderGrill();
     if (!wishPanel.hidden) renderWish();
+    if (!signPanel.hidden && !askingFor) renderSign();
   },
   async loadTitles() {
     try {
@@ -379,6 +383,10 @@ if (!visitorToken) {
     binNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
     G.updateBin(binNotes.length); if (boardOpen && !board.hidden) renderBoard();
   }, (err) => { setStatus('The bin stopped updating (' + err.code + '). Reload to reconnect.'); });
+  db.collection('sign').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
+    signNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
+    G.setSignatures(signNotes); if (!signPanel.hidden) renderSign();
+  }, () => {});
   db.collection('grill').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     grillNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
     G.setGrill(grillNotes.length); if (!grillPanel.hidden) renderGrill();
@@ -400,6 +408,7 @@ function openBoard(obj) {
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
+  if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
   else { mode = 'bin'; current = null; }
   openPanel(board); setStatus('');
@@ -416,7 +425,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; askingFor = null; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -443,7 +452,49 @@ $('mSound').addEventListener('click', () => {
   $('mSound').innerHTML = 'Sound <b>' + (on ? 'off' : 'on') + '</b>';
 });
 for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', closeBoard);
-for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+
+// ---------- the birthday signature board ----------
+const setSignStatus = (t) => { signStatus.textContent = t; };
+function renderSign() {
+  const n = signNotes.length;
+  signCount.textContent = n === 0 ? 'Nobody has signed yet — the first name goes top left.' : n === 1 ? 'One signature so far.' : n + ' signatures so far.';
+  signList.replaceChildren();
+  signNotes.forEach((x, i) => {
+    const el = document.createElement('span'); el.className = 'sg';
+    const nm = document.createElement('span'); nm.textContent = x.text;
+    const h = hashStr(x.id || x.text);   // the same hand and colour as on the board
+    nm.style.fontFamily = '"' + G.SIGN_FONTS[(h >>> 16) % G.SIGN_FONTS.length] + '", cursive';
+    nm.style.color = G.SIGN_COLORS[(h >>> 20) % G.SIGN_COLORS.length];
+    el.appendChild(nm);
+    if (canRemove(x)) { const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'rm'; rm.textContent = 'delete'; rm.addEventListener('click', () => removeNote(x, undefined, 'sign', setSignStatus, renderSign)); el.appendChild(rm); }
+    signList.appendChild(el);
+    if (askingFor === x.id) signList.appendChild(passwordForm(x, 'sign', setSignStatus, renderSign));
+  });
+  const ro = (dataMode === 'db' && canWrite === false);
+  signForm.hidden = ro;
+  if (ro) setSignStatus('Signing needs a contributor invitation to this corner.');
+  else if (dataMode === 'local' && !signStatus.textContent) setSignStatus('Not connected to the shared board right now, so your signature stays on this screen.');
+}
+function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+signForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = signName.value.trim();
+  if (!name) { setSignStatus('Write your name first.'); signName.focus(); return; }
+  if (dataMode === 'loading') { setSignStatus('Still connecting to the board. Try again in a moment.'); return; }
+  const doc = { text: name, sig: '', author: myId, at: new Date().toISOString() };
+  signBtn.disabled = true; setSignStatus('Signing…');
+  try {
+    await saveNote('sign', doc);
+    signName.value = ''; renderSign();
+    setSignStatus('Signed. Look up at the board on the wall.');
+  } catch (err) {
+    console.warn('signature not saved', err);
+    if (err && err.code === 'invalid_argument') { canWrite = false; renderSign(); }
+    else setSignStatus('Could not sign. Try once more.');
+  }
+  signBtn.disabled = false;
+});
 
 // one place that stores a note, whichever backend is in use
 async function saveNote(kind, doc) {
@@ -451,8 +502,8 @@ async function saveNote(kind, doc) {
   else if (dataMode === 'rest') { await rest.add(kind, doc); await rest.load().catch(() => {}); }
   else {
     const n = Object.assign({ id: 'local-' + Date.now() }, clean(doc));
-    (kind === 'wall' ? wallNotes : kind === 'bin' ? binNotes : grillNotes).unshift(n);
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length);
+    listOf(kind).unshift(n);
+    refreshScene();
   }
 }
 
@@ -565,17 +616,7 @@ function renderBoard() {
       meta.appendChild(rm);
     }
     el.appendChild(meta);
-    if (askingFor === n.id) {   // not this browser's note: the admin can still delete it with the password
-      const f = document.createElement('form'); f.className = 'pw'; f.noValidate = true;
-      const lab = document.createElement('span'); lab.textContent = 'Not yours. Admin password:';
-      const inp = document.createElement('input'); inp.type = 'password'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Admin password');
-      const go = document.createElement('button'); go.type = 'submit'; go.textContent = 'Delete';
-      const no = document.createElement('button'); no.type = 'button'; no.textContent = 'Cancel'; no.className = 'rm';
-      no.addEventListener('click', () => { askingFor = null; setStatus(''); renderBoard(); });
-      f.addEventListener('submit', (ev) => { ev.preventDefault(); removeNote(n, inp.value); });
-      f.append(lab, inp, go, no); el.appendChild(f);
-      setTimeout(() => inp.focus(), 30);
-    }
+    if (askingFor === n.id) el.appendChild(passwordForm(n, mode === 'poster' ? 'wall' : 'bin', setStatus, renderBoard));
     notesEl.appendChild(el);
   }
   const ro = (dataMode === 'db' && canWrite === false);
@@ -583,25 +624,41 @@ function renderBoard() {
   if (ro) readonlyEl.textContent = 'You can read this ' + (mode === 'poster' ? 'wall' : 'bin') + ', but leaving a note needs a contributor invitation to this corner.';
   else if (dataMode === 'local' && !statusEl.textContent) setStatus('Not connected to the shared wall right now, so notes you leave stay on this screen.');
 }
-async function removeNote(n, password) {
+// not this browser's note: the admin can still delete it with the password
+function passwordForm(n, kind, status, rerender) {
+  const f = document.createElement('form'); f.className = 'pw'; f.noValidate = true;
+  const lab = document.createElement('span'); lab.textContent = 'Not yours. Admin password:';
+  const inp = document.createElement('input'); inp.type = 'password'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Admin password');
+  const go = document.createElement('button'); go.type = 'submit'; go.textContent = 'Delete';
+  const no = document.createElement('button'); no.type = 'button'; no.textContent = 'Cancel'; no.className = 'rm';
+  no.addEventListener('click', () => { askingFor = null; status(''); rerender(); });
+  f.addEventListener('submit', (ev) => { ev.preventDefault(); removeNote(n, inp.value, kind, status, rerender); });
+  f.append(lab, inp, go, no);
+  setTimeout(() => inp.focus(), 30);
+  return f;
+}
+const listOf = (kind) => kind === 'wall' ? wallNotes : kind === 'bin' ? binNotes : kind === 'sign' ? signNotes : grillNotes;
+function refreshScene() { G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length); G.setSignatures(signNotes); }
+async function removeNote(n, password, kind, status, rerender) {
+  kind = kind || (mode === 'poster' ? 'wall' : 'bin'); status = status || setStatus; rerender = rerender || renderBoard;
   try {
-    if (dataMode === 'db') { await db.doc((mode === 'poster' ? 'wall/' : 'bin/') + n.id).delete(); return; }
+    if (dataMode === 'db') { await db.doc(kind + '/' + n.id).delete(); return; }
     if (dataMode === 'rest') {
       const token = password !== undefined ? password.trim() : visitorToken;
       const gone = token ? await rest.remove(n.id, token) : false;
       if (!gone) {
-        if (password !== undefined) setStatus('That is not the admin password.');
-        else { askingFor = n.id; setStatus(''); renderBoard(); }
+        if (password !== undefined) status('That is not the admin password.');
+        else { askingFor = n.id; status(''); rerender(); }
         return;
       }
       askingFor = null;
       await rest.load().catch(() => {});
-      setStatus(password !== undefined ? 'Deleted by the admin.' : 'Deleted.');
+      status(password !== undefined ? 'Deleted by the admin.' : 'Deleted.');
       return;
     }
-    const arr = mode === 'poster' ? wallNotes : binNotes; const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1);
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setWishes(wallNotes.length); renderBoard();
-  } catch (e) { setStatus('Could not remove it (' + ((e && e.code) || 'error') + ').'); }
+    const arr = listOf(kind); const i = arr.indexOf(n); if (i >= 0) arr.splice(i, 1);
+    refreshScene(); rerender();
+  } catch (e) { status('Could not remove it (' + ((e && e.code) || 'error') + ').'); }
 }
 sayForm.addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23a98576'/%3E%3Crect x='8' y='14' width='22' height='36' rx='2' fill='%23f1ebdf'/%3E%3Ccircle cx='46' cy='26' r='9' fill='%23d39a2f'/%3E%3C/svg%3E">
 <title>Where the Light Rests</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=DM+Mono:wght@400;500&family=Caveat:wght@700&family=Pacifico&family=Kalam:wght@700&family=Satisfy&family=Permanent+Marker&family=Shadows+Into+Light&family=Gloria+Hallelujah&family=Dancing+Script:wght@700&display=swap">
 <script type="importmap">
 {
   "imports": {
@@ -148,11 +148,18 @@ body.locked #cross{opacity:1}
 
 #grill .grillRow{display:flex;gap:14px;align-items:center}
 #grill img{width:84px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 3px rgba(36,32,28,.25))}
-#grillForm{display:grid;gap:8px}
-#grillForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-#grillForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
-#grillBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
-#grillBtn:disabled{opacity:.55;cursor:default}
+#grillForm,#signForm{display:grid;gap:8px}
+#grillForm .row,#signForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#grillForm input,#signForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
+#grillBtn,#signBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
+#grillBtn:disabled,#signBtn:disabled{opacity:.55;cursor:default}
+#signList{display:flex;flex-wrap:wrap;gap:6px 10px;max-height:min(30vh,240px);overflow:auto;padding:2px}
+#signList .sg{display:inline-flex;align-items:baseline;gap:6px;font-size:20px;line-height:1.2}
+#signList .sg .rm{font-size:10px}
+#signList .pw{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font:400 11px var(--mono);color:var(--ink-soft)}
+#signList .pw input{flex:1 1 90px;min-width:0;font:13px var(--display);padding:6px 8px;border:1px solid var(--glass-line);border-radius:6px;background:rgba(255,255,255,.8);color:var(--ink)}
+#signList .pw button[type=submit]{font:600 12px var(--display);padding:6px 12px;border-radius:999px;border:0;cursor:pointer;background:var(--ink);color:#f7f4ef}
+#signList .pw .rm{border:0;background:transparent;color:var(--ink-soft);font:400 11px var(--mono);cursor:pointer;text-decoration:underline;padding:0}
 .status{font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--ink-soft);min-height:1.5em}
 #grillRecent{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink-soft)}
 #credits dl{margin:0;display:grid;gap:10px;font-size:13px;line-height:1.5}
@@ -263,6 +270,23 @@ body.locked #cross{opacity:1}
       <div id="wishStatus" class="status" aria-live="polite"></div>
     </form>
     <button id="wishSee" class="linkish" type="button" hidden>See it on the poster →</button>
+  </div>
+</div>
+
+<div id="signp" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="signTitle">
+    <button class="close" data-close type="button" aria-label="Back to the hall">×</button>
+    <div class="eyebrow">The birthday board</div>
+    <h2 id="signTitle">Sign the birthday board</h2>
+    <p>Your name goes up on the wall in a colour and a hand of its own, next to everyone else's. <span id="signCount"></span></p>
+    <form id="signForm" novalidate>
+      <div class="row">
+        <input id="signName" type="text" maxlength="24" placeholder="Your name" autocomplete="off" aria-label="Your name">
+        <button id="signBtn" type="submit">Sign it</button>
+      </div>
+      <div id="signStatus" class="status" aria-live="polite"></div>
+    </form>
+    <div id="signList"></div>
   </div>
 </div>
 

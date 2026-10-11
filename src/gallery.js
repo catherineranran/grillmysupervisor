@@ -568,6 +568,117 @@ const posters = [];
 }
 
 
+// ---------- the birthday signature board (on the stone wall, past the bin) ----------
+// Everyone who visits can sign it; the names go up in a hand and a colour of their own. Balloons and bunting round it.
+const SIGN_FONTS = ['Caveat', 'Pacifico', 'Kalam', 'Satisfy', 'Permanent Marker', 'Shadows Into Light', 'Gloria Hallelujah', 'Dancing Script'];
+const SIGN_COLORS = ['#d7263d', '#f46036', '#f2a541', '#2e86ab', '#1b998b', '#7b2cbf', '#e63946', '#0a9396', '#ee9b00', '#6a4c93', '#ff5d8f', '#3a86ff', '#06a77d', '#bc4749'];
+const SIGN = { z: -11.95, y: 2.3, w: 2.6, h: 1.625 };   // between the wall door and the next bookshelf
+let signHit, setSignatures;
+{
+  const c = document.createElement('canvas'); c.width = 2048; c.height = 1280; const g2 = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  const mat = new THREE.MeshStandardMaterial({map:tex, roughness:0.85});
+  let names = [];
+  let sd = 5; const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+  const dots = []; for(let i=0;i<140;i++) dots.push({x:r()*2048, y:r()*1280, s:5+r()*9, c:SIGN_COLORS[(r()*SIGN_COLORS.length)|0], a:r()*Math.PI, k:r()});
+  function hash(str){ let h = 2166136261; for(let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function balloon(x, y, rad, col){
+    g2.save(); g2.translate(x, y);
+    const grd = g2.createRadialGradient(-rad*0.35, -rad*0.4, rad*0.1, 0, 0, rad*1.1);
+    grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.12, col); grd.addColorStop(1, col);
+    g2.fillStyle = grd; g2.globalAlpha = 0.92;
+    g2.beginPath(); g2.ellipse(0, 0, rad*0.85, rad, 0, 0, Math.PI*2); g2.fill();
+    g2.beginPath(); g2.moveTo(-rad*0.14, rad*0.98); g2.lineTo(rad*0.14, rad*0.98); g2.lineTo(0, rad*1.16); g2.closePath(); g2.fill();
+    g2.strokeStyle = '#6b6b6b'; g2.lineWidth = 3; g2.globalAlpha = 0.6;
+    g2.beginPath(); g2.moveTo(0, rad*1.16); g2.bezierCurveTo(rad*0.4, rad*1.7, -rad*0.4, rad*2.2, rad*0.1, rad*2.9); g2.stroke();
+    g2.restore();
+  }
+  function draw(){
+    const W = 2048, H = 1280;
+    g2.globalAlpha = 1; g2.fillStyle = '#fffaf0'; g2.fillRect(0, 0, W, H);
+    // soft colour wash in the corners, confetti everywhere
+    for(const [x, y, col] of [[0, 0, '#ffe3ec'], [W, 0, '#e3f2ff'], [0, H, '#fff4d6'], [W, H, '#e6f7ee']]){
+      const grd = g2.createRadialGradient(x, y, 20, x, y, 900); grd.addColorStop(0, col); grd.addColorStop(1, 'rgba(255,250,240,0)');
+      g2.fillStyle = grd; g2.fillRect(0, 0, W, H);
+    }
+    for(const d of dots){ g2.save(); g2.translate(d.x, d.y); g2.rotate(d.a); g2.fillStyle = d.c; g2.globalAlpha = 0.55;
+      if(d.k < 0.5) g2.fillRect(-d.s/2, -d.s/3, d.s, d.s*0.66); else { g2.beginPath(); g2.arc(0, 0, d.s*0.45, 0, Math.PI*2); g2.fill(); }
+      g2.restore(); }
+    g2.globalAlpha = 1;
+    // balloons in the top corners
+    balloon(150, 150, 70, '#e63946'); balloon(240, 110, 58, '#f2a541'); balloon(96, 262, 50, '#3a86ff');
+    balloon(W-150, 150, 70, '#1b998b'); balloon(W-240, 112, 58, '#7b2cbf'); balloon(W-96, 262, 50, '#ff5d8f');
+    // the header, letter by letter in party colours
+    g2.textAlign = 'center'; g2.textBaseline = 'middle';
+    const title = 'HAPPY BIRTHDAY!';
+    g2.font = '700 150px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    let total = 0; const widths = [...title].map((ch) => { const w = g2.measureText(ch).width; total += w; return w; });
+    let x = W/2 - total/2;
+    [...title].forEach((ch, i) => {
+      g2.save(); g2.translate(x + widths[i]/2, 190 + Math.sin(i*1.3)*10); g2.rotate((Math.sin(i*2.1))*0.06);
+      g2.fillStyle = 'rgba(60,40,30,0.18)'; g2.fillText(ch, 5, 6);
+      g2.fillStyle = SIGN_COLORS[i % SIGN_COLORS.length]; g2.fillText(ch, 0, 0); g2.restore();
+      x += widths[i];
+    });
+    g2.fillStyle = '#5d554d'; g2.font = '500 40px "DM Mono", ui-monospace, monospace';
+    g2.fillText('— signed by everyone who came by —', W/2, 300);
+    // the signatures: a jittered grid that tightens as the board fills
+    const n = names.length;
+    const cols = n <= 8 ? 3 : n <= 20 ? 4 : n <= 40 ? 5 : 6, rows = n <= 8 ? 3 : n <= 20 ? 5 : n <= 40 ? 8 : 10, maxShow = cols*rows;
+    const size = n <= 8 ? 104 : n <= 20 ? 78 : n <= 40 ? 58 : 46;
+    const x0 = 120, x1 = W - 120, y0 = 380, y1 = H - 90;
+    const cw = (x1 - x0)/cols, rh = (y1 - y0)/rows;
+    names.slice(0, maxShow).forEach((nm, i) => {
+      const h = hash(nm.id || nm.text);
+      const col = i % cols, row = (i / cols) | 0;
+      const jx = ((h & 255)/255 - 0.5) * cw * 0.3, jy = (((h >>> 8) & 255)/255 - 0.5) * rh * 0.3;
+      const cx = x0 + cw*(col + 0.5) + jx, cy = y0 + rh*(row + 0.5) + jy;
+      const font = SIGN_FONTS[(h >>> 16) % SIGN_FONTS.length], color = SIGN_COLORS[(h >>> 20) % SIGN_COLORS.length];
+      const rot = (((h >>> 24) & 255)/255 - 0.5) * 0.28;
+      g2.save(); g2.translate(cx, cy); g2.rotate(rot);
+      let fs = size; g2.font = '700 ' + fs + 'px "' + font + '", cursive';
+      while(fs > 22 && g2.measureText(nm.text).width > cw*0.95){ fs -= 4; g2.font = '700 ' + fs + 'px "' + font + '", cursive'; }
+      g2.fillStyle = 'rgba(60,40,30,0.12)'; g2.fillText(nm.text, 3, 3);
+      g2.fillStyle = color; g2.fillText(nm.text, 0, 0);
+      g2.restore();
+    });
+    if(!n){ g2.fillStyle = '#a39b90'; g2.font = '600 54px "Caveat", cursive'; g2.fillText('be the first to sign…', W/2, (y0+y1)/2); }
+    if(n > maxShow){ g2.fillStyle = '#5d554d'; g2.font = '500 34px "DM Mono", ui-monospace, monospace'; g2.textAlign = 'right'; g2.fillText('+ ' + (n - maxShow) + ' more', W - 60, H - 40); g2.textAlign = 'center'; }
+    tex.needsUpdate = true;
+  }
+  draw();
+  if(document.fonts && document.fonts.load){
+    Promise.all(SIGN_FONTS.concat(['Bricolage Grotesque', 'DM Mono']).map((f) => document.fonts.load('40px "' + f + '"').catch(() => null))).then(draw, draw);
+    if(document.fonts.ready) document.fonts.ready.then(draw);
+  }
+  setSignatures = function(list){ names = list.slice().reverse(); draw(); };   // oldest first, so early signers keep their spot
+  if(location.search.includes('debug')) window.__signCanvas = c;
+  // the board on the wall, in a gold-ish frame
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(SIGN.w, SIGN.h), mat);
+  board.rotation.y = -Math.PI/2; board.position.set(XW-0.053, SIGN.y, SIGN.z); board.receiveShadow = true;   // just proud of the frame's face
+  board.userData = {kind:'sign'}; world.add(board); signHit = board;
+  const gold = new THREE.MeshStandardMaterial({color:0xc9a227, roughness:0.35, metalness:0.6});
+  world.add(mesh(new THREE.BoxGeometry(0.04, SIGN.h+0.12, SIGN.w+0.12), gold, XW-0.025, SIGN.y, SIGN.z, false, true));
+  // balloons tied to the frame, bunting above
+  const string = new THREE.MeshStandardMaterial({color:0x8a8178, roughness:0.9});
+  for(const [dz, dy, col, rad] of [[-1.55, 0.95, 0xe63946, 0.17], [-1.72, 0.62, 0xf2a541, 0.14], [-1.4, 0.45, 0x3a86ff, 0.12], [1.55, 0.95, 0x1b998b, 0.17], [1.72, 0.62, 0x7b2cbf, 0.14], [1.4, 0.45, 0xff5d8f, 0.12]]){
+    const b = mesh(new THREE.SphereGeometry(rad, 20, 14), new THREE.MeshStandardMaterial({color:col, roughness:0.3, metalness:0.05}), XW-0.28, SIGN.y+dy+0.2, SIGN.z+dz);
+    b.scale.y = 1.15; world.add(b);
+    world.add(mesh(new THREE.ConeGeometry(0.03, 0.05, 8), new THREE.MeshStandardMaterial({color:col, roughness:0.4}), XW-0.28, SIGN.y+dy+0.2-rad*1.15-0.02, SIGN.z+dz, false, false));
+    const knot = SIGN.y+dy+0.2-rad*1.15-0.02, len = knot - 0.03 - SIGN.y;   // tied off at the frame's mid-height
+    world.add(mesh(new THREE.CylinderGeometry(0.004, 0.004, len, 5), string, XW-0.28, SIGN.y + len/2, SIGN.z+dz, false, false));
+  }
+  {
+    const n = 14, zA = SIGN.z - SIGN.w/2 - 0.2, zB = SIGN.z + SIGN.w/2 + 0.2, top = SIGN.y + SIGN.h/2 + 0.32;
+    const pts = []; for(let i=0;i<=n;i++){ const t = i/n; pts.push(new THREE.Vector3(XW-0.12, top - Math.sin(Math.PI*t)*0.14, zA + (zB-zA)*t)); }
+    world.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.005, 5, false), string));
+    const flag = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-0.09), new THREE.Vector3(0,0,0.09), new THREE.Vector3(0,-0.17,0)]);
+    flag.setIndex([0,1,2]); flag.computeVertexNormals();
+    for(let i=0;i<n;i++){ const t = (i+0.5)/n; const f = new THREE.Mesh(flag, new THREE.MeshStandardMaterial({color:SIGN_COLORS[i % SIGN_COLORS.length], roughness:0.8, side:THREE.DoubleSide}));
+      f.position.set(XW-0.12, top - Math.sin(Math.PI*t)*0.14 - 0.005, zA + (zB-zA)*t); world.add(f); }
+  }
+}
+
 // ---------- photo banners (pennants on a string across the sofas) ----------
 const FLAGS = 15, flagGeos = [];
 for(let i=0;i<FLAGS;i++){
@@ -942,8 +1053,8 @@ redrawPosters([], true); updateBin(0);
 
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
-  groundY, redrawPosters, updateBin, setGrill, setWishes, tickSmoke, M, T,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit]),
+  groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, SIGN_FONTS, SIGN_COLORS, tickSmoke, M, T,
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit]),
   XG, XW, Z0, Z1, H, L,
 };
 }
