@@ -15,6 +15,7 @@ The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flo
 | `src/app.js` | Wires it all up: renderer, lights, the walk, posters and bin, shared notes, quality levels |
 | `src/gallery.js` | The gallery: corridor, glazing and its three doors, furniture, banner, posters, boards, decals, plants, the wish board, the birthday signature board (balloons, bunting, names in eight handwriting fonts), the grill and its board, terrace, the trees along it, steps, bin, gate |
 | `src/siteConst.js` | Where the gallery stands in the valley and the shape of its platform (shared by the JS and GLSL terrain) |
+| `src/butterflies.js` | A handful of butterflies over the meadow (in place of the engine's bumblebees, `bees.js`, which is kept but unused): flower-to-flower flight, eyespots, silent |
 | `src/*` (the rest) | The vibe-shepherding engine: `terrain`, `world`, `grass`, `flowers`, `scenery`, `rivers`, `sky`, `bees`, `audio`, `music*`, `post`, `flock`, `sheep*`, `config`, `tuning`, `noise*`, `shaders`, `materials` — lightly patched so the terrain is level under the platform and no grass grows on it |
 | `assets/` | Banner atlas, bow, logos, tulip, the supervisor's avatar (`avatar.png`) and its sausage wrap (`sausage.png`), `alpaca.pack.txt` (the encrypted alpaca model, base64) and the bleat recordings |
 | `tuning.json` | The look tuning from vibe-shepherding |

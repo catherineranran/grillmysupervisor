@@ -11,7 +11,7 @@ import { createHorizon, createLake, heightAt } from './terrain.js';
 import { createSky } from './sky.js';
 import { createGrass } from './grass.js';
 import { createFlowers } from './flowers.js';
-import { Bees } from './bees.js';
+import { Butterflies } from './butterflies.js';
 import { Soundscape } from './audio.js';
 import { World } from './world.js';
 import { Flock } from './flock.js';
@@ -100,7 +100,7 @@ const grassMid = createGrass(U, { count: isTouch ? 110000 : 300000, size: 90, fa
 scene.add(grassNear, grassMid);
 const flowers = createFlowers(U, { count: isTouch ? 3000 : 6500, size: 32 });
 scene.add(flowers);
-const bees = new Bees(scene, U, tuning, isTouch ? 14 : 26);
+const butterflies = new Butterflies(scene, U, tuning, isTouch ? 3 : 5);   // in place of the original's bumblebees: a few, and silent
 const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
@@ -955,8 +955,8 @@ function frame() {
   herdCtx.cx += (cxT - herdCtx.cx) * kk; herdCtx.cz += (czT - herdCtx.cz) * kk;
   if (onMeadow) { herdCtx.fx += (f.x - herdCtx.fx) * kk; herdCtx.fz += (f.z - herdCtx.fz) * kk; const l = Math.hypot(herdCtx.fx, herdCtx.fz) || 1; herdCtx.fx /= l; herdCtx.fz /= l; }
   if (flock) flock.update(dt, time, herdCtx);
-  bees.update(dt, time, camera.position, f.x, f.z);
-  sound.update(dt, { camera, walker: { speed: v }, flock: flock || { bleats: [] }, bees });
+  butterflies.update(dt, time, camera.position, f.x, f.z);
+  sound.update(dt, { camera, walker: { speed: v }, flock: flock || { bleats: [] }, bees: butterflies });
 
   followShadow(tmp.copy(f).multiplyScalar(9).add(camera.position));
   post.render(renderer, scene, camera, gpuTimer && tune.calibrating ? sceneTimer : null);
@@ -974,5 +974,5 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer });
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));
