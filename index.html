@@ -153,6 +153,16 @@ body.locked #cross{opacity:1}
 #grillForm input,#signForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
 #grillBtn,#signBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
 #grillBtn:disabled,#signBtn:disabled{opacity:.55;cursor:default}
+#signForm .sub{font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
+.hands{display:flex;flex-wrap:wrap;gap:6px}
+.hands button{font-size:19px;line-height:1.1;padding:5px 10px;border-radius:8px;border:1px solid var(--glass-line);background:rgba(255,255,255,.55);cursor:pointer;color:var(--ink)}
+.hands button[aria-checked=true]{border-color:var(--ink);background:rgba(255,255,255,.95);box-shadow:0 0 0 1px var(--ink)}
+.inks{display:flex;flex-wrap:wrap;gap:6px}
+.inks button{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.9);cursor:pointer;padding:0;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.inks button[aria-checked=true]{outline:2px solid var(--ink);outline-offset:2px}
+.pad{position:relative}
+.pad canvas{display:block;width:100%;aspect-ratio:3/1;height:auto;border:1px dashed rgba(36,32,28,.4);border-radius:8px;background:rgba(255,255,255,.85);touch-action:none;cursor:crosshair}
+.pad .linkish{position:absolute;right:10px;bottom:8px}
 #signList{display:flex;flex-wrap:wrap;gap:6px 10px;max-height:min(30vh,240px);overflow:auto;padding:2px}
 #signList .sg{display:inline-flex;align-items:baseline;gap:6px;font-size:20px;line-height:1.2}
 #signList .sg .rm{font-size:10px}
@@ -284,6 +294,11 @@ body.locked #cross{opacity:1}
         <input id="signName" type="text" maxlength="24" placeholder="Your name" autocomplete="off" aria-label="Your name">
         <button id="signBtn" type="submit">Sign it</button>
       </div>
+      <div class="sub">Pick a hand and a colour…</div>
+      <div id="signHands" class="hands" role="radiogroup" aria-label="Handwriting"></div>
+      <div id="signInks" class="inks" role="radiogroup" aria-label="Colour"></div>
+      <div class="sub">…or sign it yourself, with the mouse, trackpad or a finger:</div>
+      <div class="pad"><canvas id="signPad" width="900" height="300" aria-label="Signature pad"></canvas><button type="button" id="padClear" class="linkish">clear</button></div>
       <div id="signStatus" class="status" aria-live="polite"></div>
     </form>
     <div id="signList"></div>

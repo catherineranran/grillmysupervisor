@@ -295,7 +295,7 @@ try { saySig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 const useCap = (name) => (window.claude && typeof window.claude.use === 'function') ? window.claude.use(name) : Promise.resolve(null);
 function clean(x) {
   x = x || {};
-  return { poster: Number(x.poster) || 0, text: String(x.text || '').slice(0, 200), sig: String(x.sig || '').slice(0, 24), author: typeof x.author === 'string' ? x.author : null, at: String(x.at || '') };
+  return { poster: Number(x.poster) || 0, text: String(x.text || '').slice(0, 200), sig: String(x.sig || '').slice(0, 24), ink: typeof x.ink === 'string' ? x.ink.slice(0, 6000) : '', author: typeof x.author === 'string' ? x.author : null, at: String(x.at || '') };
 }
 function setStatus(t) { statusEl.textContent = t; }
 function ago(iso) {
@@ -319,7 +319,7 @@ const rest = {
   base(t) { return BACKEND.url.replace(/\/+$/, '') + '/rest/v1/' + t; },
   headers(extra) { return Object.assign({ apikey: BACKEND.key, Authorization: 'Bearer ' + BACKEND.key, 'Content-Type': 'application/json' }, extra || {}); },
   async load() {
-    const r = await fetch(this.base(BACKEND.table) + '?select=id,kind,poster,text,sig,at&order=at.desc&limit=1000', { headers: this.headers() });
+    const r = await fetch(this.base(BACKEND.table) + '?select=id,kind,poster,text,sig,at,ink&order=at.desc&limit=1000', { headers: this.headers() });
     if (!r.ok) throw new Error('load ' + r.status);
     const rows = await r.json();
     if (!Array.isArray(rows)) throw new Error('load shape');
@@ -342,6 +342,7 @@ const rest = {
   },
   async add(kind, doc) {
     const body = { kind, poster: doc.poster || 0, text: doc.text, sig: doc.sig, owner_token: visitorToken };
+    if (doc.ink) body.ink = doc.ink;
     const r = await fetch(this.base(BACKEND.table), { method: 'POST', headers: this.headers({ Prefer: 'return=minimal' }), body: JSON.stringify(body) });
     if (!r.ok) throw new Error('add ' + r.status);
   },
@@ -408,7 +409,7 @@ function openBoard(obj) {
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
-  if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
+  if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); renderHands(); padRedraw(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
   else { mode = 'bin'; current = null; }
   openPanel(board); setStatus('');
@@ -462,10 +463,10 @@ function renderSign() {
   signList.replaceChildren();
   signNotes.forEach((x, i) => {
     const el = document.createElement('span'); el.className = 'sg';
-    const nm = document.createElement('span'); nm.textContent = x.text;
-    const h = hashStr(x.id || x.text);   // the same hand and colour as on the board
-    nm.style.fontFamily = '"' + G.SIGN_FONTS[(h >>> 16) % G.SIGN_FONTS.length] + '", cursive';
-    nm.style.color = G.SIGN_COLORS[(h >>> 20) % G.SIGN_COLORS.length];
+    const nm = document.createElement('span'); nm.textContent = (x.ink ? '✍ ' : '') + x.text;
+    const look = G.signLook(x);   // the same hand and colour as on the board
+    nm.style.fontFamily = '"' + look.font + '", cursive';
+    nm.style.color = look.color;
     el.appendChild(nm);
     if (canRemove(x)) { const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'rm'; rm.textContent = 'delete'; rm.addEventListener('click', () => removeNote(x, undefined, 'sign', setSignStatus, renderSign)); el.appendChild(rm); }
     signList.appendChild(el);
@@ -477,17 +478,70 @@ function renderSign() {
   else if (dataMode === 'local' && !signStatus.textContent) setSignStatus('Not connected to the shared board right now, so your signature stays on this screen.');
 }
 function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+// the hand and the colour: chips that show your name in each hand, and a row of inks
+const signHands = $('signHands'), signInks = $('signInks');
+let handIdx = hashStr(visitorToken) % G.SIGN_FONTS.length, inkIdx = (hashStr(visitorToken) >>> 8) % G.SIGN_COLORS.length;
+function renderHands() {
+  signHands.replaceChildren();
+  G.SIGN_FONTS.forEach((f, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(i === handIdx));
+    b.textContent = signName.value.trim() || 'Your name'; b.style.fontFamily = '"' + f + '", cursive'; b.style.color = G.SIGN_COLORS[inkIdx]; b.title = f;
+    b.addEventListener('click', () => { handIdx = i; renderHands(); });
+    signHands.appendChild(b);
+  });
+  signInks.replaceChildren();
+  G.SIGN_COLORS.forEach((c, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(i === inkIdx));
+    b.style.background = c; b.title = c;
+    b.addEventListener('click', () => { inkIdx = i; renderHands(); padRedraw(); });
+    signInks.appendChild(b);
+  });
+}
+signName.addEventListener('input', renderHands);
+
+// the pad: strokes in a 1000 × 333 space, drawn as you go
+const pad = $('signPad'), padCtx = pad.getContext('2d'), padClear = $('padClear');
+let strokes = [], drawing = null;
+const padPoint = (e) => { const r = pad.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * 1000), Math.round((e.clientY - r.top) / r.height * 333)]; };
+function padRedraw() {
+  padCtx.setTransform(pad.width / 1000, 0, 0, pad.height / 333, 0, 0);
+  padCtx.clearRect(0, 0, 1000, 333);
+  padCtx.strokeStyle = G.SIGN_COLORS[inkIdx]; padCtx.lineWidth = 7; padCtx.lineCap = 'round'; padCtx.lineJoin = 'round';
+  for (const st of strokes) {
+    if (st.length === 1) { padCtx.beginPath(); padCtx.arc(st[0][0], st[0][1], 3.5, 0, Math.PI * 2); padCtx.fillStyle = padCtx.strokeStyle; padCtx.fill(); continue; }
+    padCtx.beginPath(); padCtx.moveTo(st[0][0], st[0][1]); for (let i = 1; i < st.length; i++) padCtx.lineTo(st[i][0], st[i][1]); padCtx.stroke();
+  }
+}
+pad.addEventListener('pointerdown', (e) => { e.preventDefault(); pad.setPointerCapture(e.pointerId); drawing = [padPoint(e)]; strokes.push(drawing); padRedraw(); });
+pad.addEventListener('pointermove', (e) => { if (!drawing) return; e.preventDefault(); const q = padPoint(e), l = drawing[drawing.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= 3) { drawing.push(q); padRedraw(); } });
+const padEnd = (e) => { if (!drawing) return; drawing = null; padRedraw(); };
+pad.addEventListener('pointerup', padEnd); pad.addEventListener('pointercancel', padEnd); pad.addEventListener('pointerleave', padEnd);
+padClear.addEventListener('click', () => { strokes = []; drawing = null; padRedraw(); });
+// the ink, encoded compactly: strokes of integer points, thinned until it fits the column
+function encodeInk() {
+  const drawn = strokes.filter((st) => st.length >= 1);
+  if (!drawn.length || drawn.reduce((a, st) => a + st.length, 0) < 3) return '';
+  let tol = 3;
+  for (;;) {
+    const out = drawn.map((st) => { const r = [st[0]]; for (const q of st.slice(1)) { const l = r[r.length - 1]; if (Math.hypot(q[0] - l[0], q[1] - l[1]) >= tol) r.push(q); } return r; });
+    const str = JSON.stringify(out);
+    if (str.length <= 5800 || tol > 60) return str.length <= 6000 ? str : '';
+    tol += 3;
+  }
+}
 signForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = signName.value.trim();
-  if (!name) { setSignStatus('Write your name first.'); signName.focus(); return; }
+  if (!name) { setSignStatus('Write your name first — it goes in the list under the board.'); signName.focus(); return; }
   if (dataMode === 'loading') { setSignStatus('Still connecting to the board. Try again in a moment.'); return; }
-  const doc = { text: name, sig: '', author: myId, at: new Date().toISOString() };
+  const ink = encodeInk();
+  const doc = { text: name, sig: (ink ? '' : 'f' + handIdx) + 'c' + inkIdx, ink, author: myId, at: new Date().toISOString() };
   signBtn.disabled = true; setSignStatus('Signing…');
   try {
     await saveNote('sign', doc);
-    signName.value = ''; renderSign();
-    setSignStatus('Signed. Look up at the board on the wall.');
+    signName.value = ''; strokes = []; padRedraw(); renderHands(); renderSign();
+    setSignStatus(ink ? 'Signed, in your own hand. Look up at the board on the wall.' : 'Signed. Look up at the board on the wall.');
   } catch (err) {
     console.warn('signature not saved', err);
     if (err && err.code === 'invalid_argument') { canWrite = false; renderSign(); }
@@ -928,6 +982,7 @@ function frame() {
     d.pivot.rotation.y = d.angle;
   }
   G.tickSmoke(dt);
+  G.tickBalloons(dt, time);
 
   // the valley's sounds belong to the valley: silent in the gallery and on the terrace, fading in on the way down the steps
   const outdoors = onPlatform(player.x, player.z) ? 0

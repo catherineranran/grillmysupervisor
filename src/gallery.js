@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { withClouds } from './materials.js';
 import { SITE, toWorld } from './siteConst.js';
 import { heightAt } from './terrain.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export function buildGallery({ scene, maxAniso, isTouch }) {
 const g = new THREE.Group();
@@ -379,29 +380,64 @@ const colliders = [];
 function addBox(minX,maxX,minZ,maxZ){ colliders.push({minX,maxX,minZ,maxZ}); }
 
 const sofaZs = [];
+// leather: cognac, with a clear coat for the sheen; the backs and arms carry a baked diamond-tufting texture
+const tuftTex = makeTex(512, 256, (g, w, h) => {
+  g.fillStyle = '#7a4424'; g.fillRect(0, 0, w, h);
+  const cx = 64, cy = 64;   // diamond cell
+  for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
+    const grd = g.createRadialGradient(x, y - 6, 4, x, y, cx*0.8);
+    grd.addColorStop(0, '#a4653a'); grd.addColorStop(0.55, '#8a4f2a'); grd.addColorStop(1, '#5c3118');
+    g.fillStyle = grd; g.beginPath(); g.moveTo(x, y - cy/2); g.lineTo(x + cx/2, y); g.lineTo(x, y + cy/2); g.lineTo(x - cx/2, y); g.closePath(); g.fill();
+  }
+  // the seams and the buttons at the pleats
+  g.strokeStyle = 'rgba(40,18,8,0.55)'; g.lineWidth = 2;
+  for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
+    g.beginPath(); g.moveTo(x, y - cy/2); g.lineTo(x + cx/2, y); g.lineTo(x, y + cy/2); g.lineTo(x - cx/2, y); g.closePath(); g.stroke();
+  }
+  for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
+    for(const [px, py] of [[x, y - cy/2], [x + cx/2, y]]){
+      const b = g.createRadialGradient(px - 2, py - 2, 1, px, py, 7); b.addColorStop(0, '#7a4a2a'); b.addColorStop(1, '#2d1409');
+      g.fillStyle = b; g.beginPath(); g.arc(px, py, 6, 0, Math.PI*2); g.fill();
+    }
+  }
+});
+tuftTex.repeat.set(1, 1);
+const leather = new THREE.MeshPhysicalMaterial({color:0x7a4424, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3});
+const leatherTuft = new THREE.MeshPhysicalMaterial({map:tuftTex, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3});
+const leatherDark = new THREE.MeshPhysicalMaterial({color:0x5a2f16, roughness:0.5, clearcoat:0.4});
+const velvet = [new THREE.MeshStandardMaterial({color:0x2f5d4a, roughness:0.95}), new THREE.MeshStandardMaterial({color:0xc99a3a, roughness:0.95}), new THREE.MeshStandardMaterial({color:0x5b3f6e, roughness:0.95})];
+const walnut = new THREE.MeshStandardMaterial({color:0x3a2516, roughness:0.55, metalness:0.05});
+const brass = new THREE.MeshStandardMaterial({color:0xd4b05a, roughness:0.3, metalness:0.85});
+const nailGeo = new THREE.SphereGeometry(0.009, 8, 6), nailMats = [];
 function sofa(zc){
   sofaZs.push(zc);
   const g = new THREE.Group(); g.position.set(1.48, 0, zc);
   const len = 1.8, dep = 0.74;
-  g.add(mesh(new THREE.BoxGeometry(dep-0.12, 0.16, len-0.3), M.fabric, -0.03, 0.42, 0));
-  const seatFront = mesh(new THREE.CylinderGeometry(0.085, 0.085, len-0.3, 16), M.fabric, -0.34, 0.43, 0);
-  seatFront.rotation.x = Math.PI/2; g.add(seatFront);
-  const back = mesh(new THREE.BoxGeometry(0.2, 0.46, len-0.32), M.fabric, 0.26, 0.66, 0);
-  back.rotation.z = -0.16; g.add(back);
-  const backRoll = mesh(new THREE.CylinderGeometry(0.15, 0.15, len-0.3, 20), M.fabric, 0.22, 0.86, 0);
-  backRoll.rotation.x = Math.PI/2; g.add(backRoll);
-  for(const s of [-1,1]){
-    const arm = mesh(new THREE.CylinderGeometry(0.15, 0.15, dep+0.02, 20), M.fabric, -0.02, 0.62, s*(len/2-0.13));
-    arm.rotation.z = Math.PI/2; g.add(arm);
-    const armBody = mesh(new THREE.BoxGeometry(dep-0.1, 0.18, 0.24), M.fabric, -0.02, 0.48, s*(len/2-0.13));
-    g.add(armBody);
-    for(const fx of [-0.3, 0.3]){
-      const leg = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.36, 8), M.chrome, fx, 0.18, s*(len/2-0.12));
-      g.add(leg);
-    }
+  const k = sofaZs.length;
+  // plinth and the two seat cushions
+  g.add(mesh(new THREE.BoxGeometry(dep-0.1, 0.2, len-0.08), leatherDark, 0, 0.24, 0));
+  for(const sz of [-1, 1]) g.add(mesh(new RoundedBoxGeometry(dep-0.26, 0.17, len/2-0.14, 3, 0.05), leather, -0.04, 0.42, sz*(len/4-0.04)));
+  // the tufted back, rolled over at the top
+  const backMats = [leather, leatherTuft, leather, leather, leather, leather];   // the face towards the seat is tufted
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, len-0.3), backMats); back.position.set(0.25, 0.66, 0); back.rotation.z = -0.14; back.castShadow = true; back.receiveShadow = true; g.add(back);
+  const backRoll = mesh(new THREE.CylinderGeometry(0.11, 0.11, len-0.3, 20), leather, 0.2, 0.92, 0); backRoll.rotation.x = Math.PI/2; g.add(backRoll);
+  // rolled, tufted arms with brass nailheads along the outer edge
+  for(const sz of [-1, 1]){
+    const armMats = [leather, leather, leather, leather, sz > 0 ? leatherTuft : leather, sz > 0 ? leather : leatherTuft];
+    const armBody = new THREE.Mesh(new THREE.BoxGeometry(dep-0.1, 0.3, 0.22), armMats); armBody.position.set(-0.02, 0.5, sz*(len/2-0.12)); armBody.castShadow = true; armBody.receiveShadow = true; g.add(armBody);
+    const arm = mesh(new THREE.CylinderGeometry(0.13, 0.13, dep+0.02, 20), leather, -0.02, 0.66, sz*(len/2-0.12)); arm.rotation.z = Math.PI/2; g.add(arm);
+    for(let i=0;i<11;i++){ const n = mesh(nailGeo, brass, -0.34 + i*0.064, 0.37, sz*(len/2-0.005), false, false); g.add(n); }
   }
-  const rail = mesh(new THREE.CylinderGeometry(0.01, 0.01, len-0.2, 6), M.chrome, -0.3, 0.33, 0);
-  rail.rotation.x = Math.PI/2; g.add(rail);
+  // turned walnut feet
+  for(const sx of [-0.28, 0.26]) for(const sz of [-1, 1]){
+    g.add(mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.14, 10), walnut, sx, 0.07, sz*(len/2-0.14)));
+    g.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 10), walnut, sx, 0.145, sz*(len/2-0.14), false, false));
+  }
+  // a velvet cushion in each corner
+  for(const sz of [-1, 1]){
+    const cu = mesh(new RoundedBoxGeometry(0.1, 0.4, 0.4, 3, 0.04), velvet[(k + (sz > 0 ? 1 : 0)) % velvet.length], 0.1, 0.72, sz*(len/2-0.36));
+    cu.rotation.z = -0.22; cu.rotation.y = sz*0.18; g.add(cu);
+  }
   world.add(g);
   addBox(1.08, 2, zc-len/2, zc+len/2);
 }
@@ -547,22 +583,31 @@ plant(36.4); lamp(35.6);
 }
 
 
-// ---------- posters (one above each sofa) ----------
+// ---------- posters (one above each sofa): landscape glass boards on chrome standoffs ----------
 const posters = [];
+const POSTER_W = 1.6, POSTER_H = 1.0, POSTER_Y = 3.2;
 {
-  const posterGeo = new THREE.PlaneGeometry(0.95, 1.2);
-  const frameGeo = new THREE.BoxGeometry(0.035, 1.27, 1.02);
-  const frameMat = new THREE.MeshStandardMaterial({color:0x3b312a, roughness:0.6});
+  const posterGeo = new THREE.PlaneGeometry(POSTER_W, POSTER_H);
+  const standoffGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.05, 12), capGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.012, 12);
+  const edgeGeo = new THREE.BoxGeometry(0.012, POSTER_H+0.012, POSTER_W+0.012);   // the pane's thickness, a pale rim just behind the face
+  const glassEdge = new THREE.MeshPhysicalMaterial({color:0xcfe6e4, roughness:0.1, metalness:0, transparent:true, opacity:0.55});
   const zs = sofaZs.slice().sort((a,b)=>b-a);
   zs.forEach((z,i)=>{
-    const c = document.createElement('canvas'); c.width = 512; c.height = 648;
-    const tex = new THREE.CanvasTexture(c); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = maxAniso;
-    const mat = new THREE.MeshStandardMaterial({map:tex, roughness:0.88});
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 640;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+    // the glass: the canvas carries its own alpha (frosted pane, paper notes stuck on it), with a glossy clear coat
+    const mat = new THREE.MeshPhysicalMaterial({map:tex, transparent:true, roughness:0.12, metalness:0, clearcoat:0.9, clearcoatRoughness:0.08, envMapIntensity:0.6, depthWrite:true});
     const m = new THREE.Mesh(posterGeo, mat);
-    m.rotation.y = -Math.PI/2; m.position.set(XW-0.042, 3.22, z); m.receiveShadow = true;
+    m.rotation.y = -Math.PI/2; m.position.set(XW-0.062, POSTER_Y, z); m.receiveShadow = true; m.renderOrder = 3;
     m.userData = {kind:'poster', n:i+1};
     world.add(m);
-    world.add(mesh(frameGeo, frameMat, XW-0.02, 3.22, z, false, true));
+    // the pane's thickness, seen as a pale edge
+    const edge = mesh(edgeGeo, glassEdge, XW-0.054, POSTER_Y, z, false, false); edge.renderOrder = 2; world.add(edge);
+    // four chrome standoffs hold the pane off the stone
+    for(const dy of [-1, 1]) for(const dz of [-1, 1]){
+      const so = mesh(standoffGeo, M.chrome, XW-0.03, POSTER_Y + dy*(POSTER_H/2-0.06), z + dz*(POSTER_W/2-0.06), true, false); so.rotation.z = Math.PI/2; world.add(so);
+      const cap = mesh(capGeo, M.chrome, XW-0.066, POSTER_Y + dy*(POSTER_H/2-0.06), z + dz*(POSTER_W/2-0.06), false, false); cap.rotation.z = Math.PI/2; world.add(cap);
+    }
     posters.push({n:i+1, z, mesh:m, mat, canvas:c, ctx:c.getContext('2d'), tex, key:null});
   });
 }
@@ -573,6 +618,15 @@ const posters = [];
 const SIGN_FONTS = ['Caveat', 'Pacifico', 'Kalam', 'Satisfy', 'Permanent Marker', 'Shadows Into Light', 'Gloria Hallelujah', 'Dancing Script'];
 const SIGN_COLORS = ['#d7263d', '#f46036', '#f2a541', '#2e86ab', '#1b998b', '#7b2cbf', '#e63946', '#0a9396', '#ee9b00', '#6a4c93', '#ff5d8f', '#3a86ff', '#06a77d', '#bc4749'];
 const SIGN = { z: -11.95, y: 2.3, w: 2.6, h: 1.625 };   // between the wall door and the next bookshelf
+function signHash(str){ let h = 2166136261; for(let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+// the hand and the colour of a signature: chosen by the signer (sig = 'f<hand>c<ink>', or 'c<ink>' for a drawn one), else by hash
+function signLook(x){
+  const h = signHash(x.id || x.text || '');
+  let font = SIGN_FONTS[(h >>> 16) % SIGN_FONTS.length], color = SIGN_COLORS[(h >>> 20) % SIGN_COLORS.length];
+  const m = /^(?:f(\d+))?c(\d+)$/.exec(x.sig || '');
+  if(m){ if(m[1] !== undefined) font = SIGN_FONTS[Number(m[1]) % SIGN_FONTS.length]; color = SIGN_COLORS[Number(m[2]) % SIGN_COLORS.length]; }
+  return { font, color };
+}
 let signHit, setSignatures;
 {
   const c = document.createElement('canvas'); c.width = 2048; c.height = 1280; const g2 = c.getContext('2d');
@@ -633,13 +687,34 @@ let signHit, setSignatures;
       const col = i % cols, row = (i / cols) | 0;
       const jx = ((h & 255)/255 - 0.5) * cw * 0.3, jy = (((h >>> 8) & 255)/255 - 0.5) * rh * 0.3;
       const cx = x0 + cw*(col + 0.5) + jx, cy = y0 + rh*(row + 0.5) + jy;
-      const font = SIGN_FONTS[(h >>> 16) % SIGN_FONTS.length], color = SIGN_COLORS[(h >>> 20) % SIGN_COLORS.length];
+      const { font, color } = signLook(nm);
       const rot = (((h >>> 24) & 255)/255 - 0.5) * 0.28;
       g2.save(); g2.translate(cx, cy); g2.rotate(rot);
-      let fs = size; g2.font = '700 ' + fs + 'px "' + font + '", cursive';
-      while(fs > 22 && g2.measureText(nm.text).width > cw*0.95){ fs -= 4; g2.font = '700 ' + fs + 'px "' + font + '", cursive'; }
-      g2.fillStyle = 'rgba(60,40,30,0.12)'; g2.fillText(nm.text, 3, 3);
-      g2.fillStyle = color; g2.fillText(nm.text, 0, 0);
+      let ink = null;
+      if(nm.ink){ try { ink = JSON.parse(nm.ink); } catch(e){ ink = null; } }
+      if(Array.isArray(ink) && ink.length){
+        // a hand-drawn signature: scale its strokes (pad space 1000 × 333) into the slot
+        let x0i = 1e9, y0i = 1e9, x1i = -1e9, y1i = -1e9;
+        for(const st of ink) for(const q of st){ x0i = Math.min(x0i, q[0]); y0i = Math.min(y0i, q[1]); x1i = Math.max(x1i, q[0]); y1i = Math.max(y1i, q[1]); }
+        const bw = Math.max(40, x1i - x0i), bh = Math.max(40, y1i - y0i);
+        const sc = Math.min(cw*0.95/bw, rh*0.9/bh, size/70);
+        const ox = (x0i + x1i)/2, oy = (y0i + y1i)/2;
+        g2.lineCap = 'round'; g2.lineJoin = 'round';
+        for(const pass of [[3, 'rgba(60,40,30,0.12)'], [0, color]]){
+          g2.strokeStyle = pass[1]; g2.fillStyle = pass[1]; g2.lineWidth = Math.max(4, 11*sc);
+          for(const st of ink){
+            if(st.length === 1){ g2.beginPath(); g2.arc((st[0][0]-ox)*sc + pass[0], (st[0][1]-oy)*sc + pass[0], Math.max(1.5, 3.5*sc), 0, Math.PI*2); g2.fill(); continue; }
+            g2.beginPath(); g2.moveTo((st[0][0]-ox)*sc + pass[0], (st[0][1]-oy)*sc + pass[0]);
+            for(let k=1;k<st.length;k++) g2.lineTo((st[k][0]-ox)*sc + pass[0], (st[k][1]-oy)*sc + pass[0]);
+            g2.stroke();
+          }
+        }
+      } else {
+        let fs = size; g2.font = '700 ' + fs + 'px "' + font + '", cursive';
+        while(fs > 22 && g2.measureText(nm.text).width > cw*0.95){ fs -= 4; g2.font = '700 ' + fs + 'px "' + font + '", cursive'; }
+        g2.fillStyle = 'rgba(60,40,30,0.12)'; g2.fillText(nm.text, 3, 3);
+        g2.fillStyle = color; g2.fillText(nm.text, 0, 0);
+      }
       g2.restore();
     });
     if(!n){ g2.fillStyle = '#a39b90'; g2.font = '600 54px "Caveat", cursive'; g2.fillText('be the first to sign…', W/2, (y0+y1)/2); }
@@ -676,6 +751,73 @@ let signHit, setSignatures;
     flag.setIndex([0,1,2]); flag.computeVertexNormals();
     for(let i=0;i<n;i++){ const t = (i+0.5)/n; const f = new THREE.Mesh(flag, new THREE.MeshStandardMaterial({color:SIGN_COLORS[i % SIGN_COLORS.length], roughness:0.8, side:THREE.DoubleSide}));
       f.position.set(XW-0.12, top - Math.sin(Math.PI*t)*0.14 - 0.005, zA + (zB-zA)*t); world.add(f); }
+  }
+}
+
+// ---------- numbered balloons: the way round the party ----------
+// 1 the wish board, 2 the signature board, 3 the grill; the fourth drifts from the door down to the grassland and back
+function balloonSprite(num, label, col, dark){
+  const c = document.createElement('canvas'); c.width = 256; c.height = 640; const g = c.getContext('2d');
+  const cx = 128, cy = 150, rx = 100, ry = 122;
+  // the balloon, lit from the top left
+  const grd = g.createRadialGradient(cx - 36, cy - 48, 10, cx, cy, ry * 1.15);
+  grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.16, col); grd.addColorStop(0.85, col); grd.addColorStop(1, dark);
+  g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); g.fill();
+  g.fillStyle = dark; g.beginPath(); g.moveTo(cx - 14, cy + ry - 4); g.lineTo(cx + 14, cy + ry - 4); g.lineTo(cx, cy + ry + 18); g.closePath(); g.fill();
+  // the string
+  g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + ry + 18);
+  g.bezierCurveTo(cx + 40, cy + ry + 120, cx - 40, cy + ry + 240, cx + 10, 630); g.stroke();
+  // the number and the label
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 150px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  g.lineWidth = 12; g.strokeStyle = dark; g.strokeText(String(num), cx, cy - 10);
+  g.fillStyle = '#ffffff'; g.fillText(String(num), cx, cy - 10);
+  g.font = '700 24px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  g.lineWidth = 6; g.strokeStyle = dark; g.strokeText(label, cx, cy + 78); g.fillStyle = '#ffffff'; g.fillText(label, cx, cy + 78);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false}));
+  sp.scale.set(0.56, 1.4, 1); sp.center.set(0.5, 0.5);
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => { /* redraw with the real font */
+    g.clearRect(0,0,256,640);
+    g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); g.fill();
+    g.fillStyle = dark; g.beginPath(); g.moveTo(cx - 14, cy + ry - 4); g.lineTo(cx + 14, cy + ry - 4); g.lineTo(cx, cy + ry + 18); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + ry + 18); g.bezierCurveTo(cx + 40, cy + ry + 120, cx - 40, cy + ry + 240, cx + 10, 630); g.stroke();
+    g.font = '700 150px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.lineWidth = 12; g.strokeStyle = dark; g.strokeText(String(num), cx, cy - 10); g.fillStyle = '#ffffff'; g.fillText(String(num), cx, cy - 10);
+    g.font = '700 24px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.lineWidth = 6; g.strokeStyle = dark; g.strokeText(label, cx, cy + 78); g.fillStyle = '#ffffff'; g.fillText(label, cx, cy + 78);
+    tex.needsUpdate = true;
+  });
+  return sp;
+}
+const guideBalloons = [];
+{
+  const specs = [
+    [1, 'make a wish', '#e8485b', '#8d1f2e', [-0.95, 1.95, -2.7]],
+    [2, 'sign the board', '#3f8ae6', '#1d4a8a', [1.05, 3.45, -11.95]],
+    [3, 'the grill', '#f0962e', '#9a5210', [-4.6, 2.35, -6.7]],
+  ];
+  for(const [n, label, col, dark, pos] of specs){
+    const sp = balloonSprite(n, label, col, dark); sp.position.set(pos[0], pos[1], pos[2]); world.add(sp);
+    guideBalloons.push({ sp, base: pos.slice(), phase: n * 1.7 });
+  }
+  // the fourth balloon's route: in at the door, across the terrace, down the steps, over the meadow to the gate
+  const route = [[-1.3, 2.2, 1.2], [-2.6, 2.2, -0.9], [-5.6, 2.2, -2.2], [-8.6, 2.1, -3.3], [-11.4, 1.0, -3.3], [-15.5, 0.75, -5.5], [-20.5, 0.7, -9.5], [-25.6, 0.75, -13.4]];
+  const curve = new THREE.CatmullRomCurve3(route.map((r) => new THREE.Vector3(r[0], r[1], r[2])), false, 'centripetal', 0.5);
+  const sp = balloonSprite(4, 'to the grassland', '#3bb273', '#1d6b43'); world.add(sp);
+  guideBalloons.push({ sp, phase: 4.2, route: curve, t: 0, len: curve.getLength(), wait: 0, pos: new THREE.Vector3() });
+}
+function tickBalloons(dt, time){
+  for(const b of guideBalloons){
+    if(!b.route){
+      b.sp.position.set(b.base[0] + Math.sin(time*0.7 + b.phase)*0.06, b.base[1] + Math.sin(time*1.3 + b.phase)*0.09, b.base[2] + Math.cos(time*0.9 + b.phase)*0.06);
+      continue;
+    }
+    // drift along the route at walking pace, wait at the gate, fade, and start again at the door
+    if(b.wait > 0){ b.wait -= dt; b.sp.material.opacity = Math.min(1, Math.max(0, b.wait < 1 ? b.wait : 1)); if(b.wait <= 0){ b.t = 0; } continue; }
+    b.t += dt * 1.15 / b.len;
+    if(b.t >= 1){ b.t = 1; b.wait = 4; }
+    b.route.getPointAt(Math.min(1, Math.max(0, b.t)), b.pos);
+    b.sp.material.opacity = Math.min(1, b.t * b.len / 2) * Math.min(1, (1 - b.t) * b.len / 1.5 + 0.35);
+    b.sp.position.set(b.pos.x + Math.sin(time*0.8 + b.phase)*0.05, b.pos.y + Math.sin(time*1.4 + b.phase)*0.08, b.pos.z);
   }
 }
 
@@ -998,46 +1140,49 @@ function wrapText(g, text, x, y, maxW, lh, maxLines){
 }
 function drawPoster(p, notes){
   const g = p.ctx, W = p.canvas.width, H = p.canvas.height;
-  g.setTransform(1,0,0,1,0,0); g.textAlign = 'left'; g.textBaseline = 'top';
-  g.fillStyle = '#f1ebdf'; g.fillRect(0,0,W,H);
-  let sd = 11 + p.n;
-  const prand = ()=>{ sd = (sd*16807) % 2147483647; return sd/2147483647; };
-  for(let i=0;i<700;i++){ g.fillStyle = 'rgba(90,70,50,'+(prand()*0.06).toFixed(3)+')'; g.fillRect(prand()*W, prand()*H, 2, 2); }
-  g.strokeStyle = 'rgba(60,45,30,.28)'; g.lineWidth = 2; g.strokeRect(14,14,W-28,H-28);
-  g.fillStyle = '#5d554d'; g.font = '500 15px "DM Mono", ui-monospace, monospace';
-  g.fillText('WALL OF NOTES  ·  NO. '+p.n+' OF '+posters.length, 36, 40);
-  g.fillStyle = '#24201c'; g.font = '700 46px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H); g.textAlign = 'left'; g.textBaseline = 'top';
+  // frosted glass: faint, a little lighter at the top, with a pale rim and a soft inner shadow
+  const wash = g.createLinearGradient(0, 0, 0, H); wash.addColorStop(0, 'rgba(240,248,250,0.42)'); wash.addColorStop(1, 'rgba(225,238,240,0.30)');
+  g.fillStyle = wash; g.fillRect(0,0,W,H);
+  const sheen = g.createLinearGradient(0, 0, W, H); sheen.addColorStop(0, 'rgba(255,255,255,0.22)'); sheen.addColorStop(0.45, 'rgba(255,255,255,0)'); sheen.addColorStop(0.6, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(255,255,255,0.14)');
+  g.fillStyle = sheen; g.fillRect(0,0,W,H);
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 6; g.strokeRect(3,3,W-6,H-6);
+  g.strokeStyle = 'rgba(40,60,70,0.18)'; g.lineWidth = 2; g.strokeRect(9,9,W-18,H-18);
+  // the left third: heading and title, etched into the glass
+  g.fillStyle = 'rgba(50,58,62,0.85)'; g.font = '500 17px "DM Mono", ui-monospace, monospace';
+  g.fillText('WALL OF NOTES  ·  NO. '+p.n+' OF '+posters.length, 44, 46);
+  g.fillStyle = 'rgba(22,26,28,0.92)';
   const title = (p.title || 'Leave a kind word').trim();
   let l1 = title, l2 = '';
   if(title.includes('\n')){ [l1, l2] = title.split('\n'); }
   else if(title.length > 11){ const cut = title.lastIndexOf(' ', Math.ceil(title.length/2) + 2); if(cut > 0){ l1 = title.slice(0, cut); l2 = title.slice(cut+1); } }
-  const fit = (txt) => { let size = 46; g.font = '700 '+size+'px "Bricolage Grotesque", ui-sans-serif, sans-serif'; while(g.measureText(txt).width > W-72 && size > 24){ size -= 2; g.font = '700 '+size+'px "Bricolage Grotesque", ui-sans-serif, sans-serif'; } };
-  fit(l1); g.fillText(l1, 36, 64); if(l2){ fit(l2); g.fillText(l2, 36, 112); }
-  g.fillStyle = 'rgba(36,32,28,.45)'; g.fillRect(36, 170, W-72, 2);
+  const fit = (txt) => { let size = 54; g.font = '700 '+size+'px "Bricolage Grotesque", ui-sans-serif, sans-serif'; while(g.measureText(txt).width > 300 && size > 26){ size -= 2; g.font = '700 '+size+'px "Bricolage Grotesque", ui-sans-serif, sans-serif'; } };
+  fit(l1); g.fillText(l1, 44, 84); if(l2){ fit(l2); g.fillText(l2, 44, 144); }
+  g.fillStyle = 'rgba(40,50,56,0.45)'; g.fillRect(44, 214, 300, 2);
+  g.fillStyle = 'rgba(50,58,62,0.8)'; g.font = '500 15px "DM Mono", ui-monospace, monospace';
+  const hint = notes.length ? (isTouch ? 'TAP TO READ OR ADD' : 'PRESS E TO READ OR ADD') : (isTouch ? 'TAP THE BOARD TO WRITE' : 'PRESS E TO WRITE');
+  g.fillText(hint, 44, H-62);
+  // the right two thirds: paper notes stuck to the glass, newest first, four at a time
+  const x0 = 384, y0 = 44, cw = 298, ch = 258, gap = 18, MAXN = 4, shown = notes.slice(0, MAXN);
   if(!notes.length){
-    g.setLineDash([7,7]); g.strokeStyle = 'rgba(36,32,28,.35)'; g.lineWidth = 2; g.strokeRect(60, 236, W-120, 176); g.setLineDash([]);
-    g.fillStyle = '#5d554d'; g.font = '500 22px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.textAlign = 'center';
-    g.fillText('Nothing pinned yet.', W/2, 296); g.fillText('Be the first.', W/2, 328); g.textAlign = 'left';
-    g.font = '500 14px "DM Mono", ui-monospace, monospace'; g.textAlign = 'center';
-    g.fillText(isTouch ? 'TAP THE POSTER TO WRITE' : 'PRESS E TO WRITE', W/2, H-56); g.textAlign = 'left';
-  } else {
-    const cw = 440, ch = 120, gx = 36, gy = 186, gap = 12, MAXN = 3, shown = notes.slice(0, MAXN);
-    shown.forEach((n,i)=>{
-      const x = gx, y = gy + i*(ch+gap), h = hashStr(n.id);
-      g.save(); g.translate(x+cw/2, y+ch/2); g.rotate(((h%7)-3)*0.006);
-      g.fillStyle = 'rgba(0,0,0,.13)'; g.fillRect(-cw/2+3, -ch/2+4, cw, ch);
-      g.fillStyle = PAPER[h % PAPER.length]; g.fillRect(-cw/2, -ch/2, cw, ch);
-      g.fillStyle = '#b5482f'; g.beginPath(); g.arc(0, -ch/2+9, 5, 0, Math.PI*2); g.fill();
-      g.fillStyle = '#24201c'; g.font = '500 19px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-      wrapText(g, n.text, -cw/2+14, -ch/2+20, cw-28, 22, 3);
-      g.fillStyle = '#5d554d'; g.font = 'italic 500 14px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.textAlign = 'right';
-      g.fillText('— '+(n.sig || 'someone'), cw/2-14, ch/2-20); g.textAlign = 'left';
-      g.restore();
-    });
-    g.fillStyle = '#5d554d'; g.font = '500 14px "DM Mono", ui-monospace, monospace'; g.textAlign = 'center';
-    g.fillText(notes.length > MAXN ? '+ '+(notes.length-MAXN)+' MORE  ·  '+(isTouch?'TAP':'PRESS E')+' TO READ THEM ALL' : (isTouch ? 'TAP THE POSTER TO ADD YOURS' : 'PRESS E TO ADD YOURS'), W/2, H-56);
-    g.textAlign = 'left';
+    g.setLineDash([8,8]); g.strokeStyle = 'rgba(40,50,56,0.4)'; g.lineWidth = 2; g.strokeRect(x0, y0+40, W-x0-44, H-y0-124); g.setLineDash([]);
+    g.fillStyle = 'rgba(40,50,56,0.75)'; g.font = '500 26px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.textAlign = 'center';
+    g.fillText('Nothing pinned here yet.', (x0+W-44)/2, 250); g.fillText('Be the first.', (x0+W-44)/2, 290); g.textAlign = 'left';
   }
+  shown.forEach((n,i)=>{
+    const col = i % 2, row = (i / 2) | 0, h = hashStr(n.id);
+    const x = x0 + col*(cw+gap), y = y0 + row*(ch+gap);
+    g.save(); g.translate(x+cw/2, y+ch/2); g.rotate(((h%7)-3)*0.012);
+    g.fillStyle = 'rgba(0,0,0,.16)'; g.fillRect(-cw/2+3, -ch/2+5, cw, ch);
+    g.fillStyle = PAPER[h % PAPER.length]; g.fillRect(-cw/2, -ch/2, cw, ch);
+    g.fillStyle = 'rgba(255,255,255,0.55)'; g.fillRect(-cw/2+cw*0.3, -ch/2-6, cw*0.4, 18);   // a strip of tape
+    g.fillStyle = '#24201c'; g.font = '500 21px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    wrapText(g, n.text, -cw/2+16, -ch/2+28, cw-32, 26, 6);
+    g.fillStyle = '#5d554d'; g.font = 'italic 500 16px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.textAlign = 'right';
+    g.fillText('— '+(n.sig || 'someone'), cw/2-16, ch/2-30); g.textAlign = 'left';
+    g.restore();
+  });
+  if(notes.length > MAXN){ g.fillStyle = 'rgba(40,50,56,0.8)'; g.font = '500 15px "DM Mono", ui-monospace, monospace'; g.textAlign = 'right'; g.fillText('+ '+(notes.length-MAXN)+' MORE', W-44, H-62); g.textAlign = 'left'; }
   p.tex.needsUpdate = true;
 }
 function redrawPosters(wallNotes, force){
@@ -1053,7 +1198,7 @@ redrawPosters([], true); updateBin(0);
 
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
-  groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, SIGN_FONTS, SIGN_COLORS, tickSmoke, M, T,
+  groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, guideBalloons, M, T,
   interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit]),
   XG, XW, Z0, Z1, H, L,
 };
