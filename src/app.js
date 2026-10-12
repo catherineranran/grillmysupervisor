@@ -32,7 +32,7 @@ const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const $ = (id) => document.getElementById(id);
 
 // ---------- UI copy ----------
-const keys = $('keys'), hint = $('hint');
+const keys = $('keys');
 // the entrance card's VR marks: a fresh random scatter each visit — a jittered grid, so they spread over the
 // whole card without piling up; a few cells left empty, sizes, tilts and strengths all drawn at random
 const introMarks = $('introMarks');
@@ -51,10 +51,8 @@ function scatterMarks() {
 scatterMarks();
 if (isTouch) {
   keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
-  hint.innerHTML = '<b>Left thumb</b> walks · <b>right thumb</b> looks · <b>tap</b> a poster';
 } else {
   keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, leave a greeting, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
-  hint.innerHTML = '<b>Click</b> the scene to look · <b>WASD</b> walk · <b>E</b> read a poster · <b>P</b> all posters · <b>Esc</b> free cursor';
 }
 
 // ---------- renderer, scene, lights ----------
@@ -194,7 +192,6 @@ let locked = false, dragging = false, lastX = 0, lastY = 0;
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   document.body.classList.toggle('locked', locked);
-  if (!locked) { hint.style.opacity = '1'; hintFaded = false; clearTimeout(hintTimer); } else fadeHint();
 });
 function tryLock() { try { const p = canvas.requestPointerLock && canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
 document.addEventListener('mousemove', (e) => { if (locked) look(e.movementX, e.movementY, 0.0022); });
@@ -215,7 +212,6 @@ canvas.addEventListener('pointerdown', (e) => {
   const role = (e.clientX < innerWidth * 0.45 && ![...touches.values()].some((t) => t.role === 'joy')) ? 'joy' : 'look';
   touches.set(e.pointerId, { role, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY, t: performance.now() });
   if (role === 'joy') { joy.style.display = 'block'; joy.style.left = e.clientX + 'px'; joy.style.top = e.clientY + 'px'; joyKnob.style.transform = 'translate(0,0)'; }
-  fadeHint();
 });
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') {
@@ -259,8 +255,6 @@ $('enter').addEventListener('click', () => {
   if (!isTouch) tryLock();
   canvas.focus();
 });
-let hintFaded = false, hintTimer = null;
-function fadeHint() { if (hintFaded) return; hintFaded = true; hintTimer = setTimeout(() => { hint.style.opacity = '0.0'; }, 6000); }
 
 // ---------- looking at posters, the bin and the gate ----------
 const raycaster = new THREE.Raycaster(); raycaster.far = 7.5;
@@ -976,7 +970,6 @@ function frame() {
   player.x += player.vx * dt; player.z += player.vz * dt;
   collide();
   const v = Math.hypot(player.vx, player.vz);
-  if (mag > 0.05 && !hintFaded) fadeHint();
   player.bob += v * dt * 2.6;
   const bob = reduceMotion ? 0 : Math.sin(player.bob * 2) * 0.022 * Math.min(v / 2, 1);
   player.y += (groundLocal(player.x, player.z) - player.y) * Math.min(1, dt * 14);
