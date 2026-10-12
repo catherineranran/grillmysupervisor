@@ -65,6 +65,7 @@ export class Soundscape {
     this.buildWind();
     this.buildWater();
     this.buildBees();
+    this.buildFire();
     this.loadBleats();
     this.musics = { kuy: new KuyMusic(ctx, this.bus.music), song: new SongMusic(ctx, this.bus.music, this.white) };
     document.addEventListener('visibilitychange', () => {
@@ -289,6 +290,54 @@ export class Soundscape {
     osc.stop(end); lfo.stop(end); br.stop(end);
   }
 
+  // —— the campfire: a low rumble of embers and a scatter of pops and crackles, from where the fire is ——
+  buildFire() {
+    const ctx = this.ctx;
+    this.fx = ctx.createGain(); this.fx.gain.value = 1; this.fx.connect(this.master);   // outside the tuning's buses
+    const pan = this.panner(2.2, 1.25);
+    pan.connect(this.fx);
+    const bed = this.loop(this.brown);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 320; bp.Q.value = 0.6;
+    const bg = ctx.createGain(); bg.gain.value = 0.0;
+    bed.connect(bp).connect(bg).connect(pan);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+    hp.connect(pan);
+    this.fire = { pan, bedGain: bg, pops: hp, next: 0, level: 0, pos: null };
+  }
+  firePop(t) {
+    const ctx = this.ctx, f = this.fire;
+    const src = ctx.createBufferSource(); src.buffer = this.white;
+    const g = ctx.createGain();
+    const d = rand(0.004, 0.03), a = rand(0.08, 0.5) * f.level;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+    src.connect(g).connect(f.pops);
+    src.start(t, Math.random() * 3); src.stop(t + d + 0.01);
+  }
+
+  // —— the owl: two soft low hoots and a longer one, from its perch on the gate ——
+  owl(x, y, z) {
+    const ctx = this.ctx;
+    if (!ctx || !this.fx) return;
+    const p = this.panner(4, 1);
+    this.setPos(p, x, y, z);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+    lp.connect(p).connect(this.fx);
+    let t = ctx.currentTime + 0.05;
+    const base = rand(330, 390);
+    for (const [len, gap, drop] of [[0.28, 0.16, 0.92], [0.26, 0.42, 0.9], [0.62, 0, 0.85]]) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(base, t); o.frequency.exponentialRampToValueAtTime(base * drop, t + len);
+      const o2 = ctx.createOscillator(); o2.type = 'triangle';
+      o2.frequency.setValueAtTime(base * 2.01, t); o2.frequency.exponentialRampToValueAtTime(base * 2.01 * drop, t + len);
+      const g = ctx.createGain(), g2 = ctx.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.07); g.gain.setValueAtTime(0.5, t + len * 0.6); g.gain.linearRampToValueAtTime(0, t + len);
+      g2.gain.value = 0.06;
+      o.connect(g).connect(lp); o2.connect(g2).connect(g);
+      o.start(t); o2.start(t); o.stop(t + len + 0.02); o2.stop(t + len + 0.02);
+      t += len + gap;
+    }
+  }
+
   // —— 云雀：天上一段急促的鸣唱 ——
   lark(cx, cy, cz) {
     const ctx = this.ctx;
@@ -405,6 +454,17 @@ export class Soundscape {
     const music = this.music;
     if (T.music > 0 && this.musicOn) music.update(now);
     else music.next = Math.max(music.next, now + 5);
+
+    // the campfire: louder the nearer you are (the panner does the distance); pops come thick and fast
+    if (this.fire && this.fire.pos) {
+      const f = this.fire;
+      this.setPos(f.pan, f.pos.x, f.pos.y, f.pos.z);
+      set(f.bedGain.gain, 0.5 * f.level, 0.3);
+      if (f.level > 0.01) {
+        if (f.next < now) f.next = now + 0.02;
+        while (f.next < now + 0.15) { this.firePop(f.next); f.next += -Math.log(1 - Math.random()) / 9; }
+      }
+    }
 
     // 云雀
     this.nextLark -= dt;

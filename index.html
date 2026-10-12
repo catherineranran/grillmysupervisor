@@ -180,13 +180,18 @@ body.locked #cross{opacity:1}
 #plist .t{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #plist .c{font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
 
-#grill .grillRow{display:flex;gap:14px;align-items:center}
-#grill img{width:84px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 3px rgba(36,32,28,.25))}
+#grill .grillRow,#fire .grillRow{display:flex;gap:14px;align-items:center}
+#grill img,#fire img{width:84px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 3px rgba(36,32,28,.25))}
+#fire .flame{width:84px;height:104px;flex:0 0 auto;display:grid;place-items:center;font-size:58px;filter:drop-shadow(0 2px 6px rgba(255,120,30,.45))}
 #grillForm,#signForm{display:grid;gap:8px}
 #grillForm .row,#signForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 #grillForm input,#signForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
-#grillBtn,#signBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
-#grillBtn:disabled,#signBtn:disabled{opacity:.55;cursor:default}
+#grillBtn,#signBtn,#fireBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
+#grillBtn:disabled,#signBtn:disabled,#fireBtn:disabled{opacity:.55;cursor:default}
+#fireForm{display:grid;gap:8px}
+#fireForm .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#fireForm input{flex:1 1 150px;font:14px/1.45 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;-webkit-user-select:text;user-select:text}
+#fireRecent{font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink-soft)}
 #signForm .sub{font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
 .hands{display:flex;flex-wrap:wrap;gap:6px}
 .hands button{font-size:19px;line-height:1.1;padding:5px 10px;border-radius:8px;border:1px solid var(--glass-line);background:rgba(255,255,255,.55);cursor:pointer;color:var(--ink)}
@@ -255,6 +260,26 @@ body.locked #cross{opacity:1}
     <h2 id="gateTitle">The herding grounds lie past this gate</h2>
     <p>This valley is forked from Ranran's other world, <em>Herding Alpacas on the Ili Grassland</em>. Over there you walk the endless valley with a flock that follows you and can name the alpacas after whoever annoyed you today. It lives on its own page, so crossing opens it in a new tab.</p>
     <a id="gateGo" class="go" href="https://ranranli.net/vibe-shepherding/" target="_blank" rel="noopener">Cross over →</a>
+  </div>
+</div>
+
+<div id="fire" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="fireTitle">
+    <button class="close" data-close type="button" aria-label="Back to the meadow">×</button>
+    <div class="eyebrow">The campfire by the stream</div>
+    <h2 id="fireTitle">Toast a marshmallow for the supervisor?</h2>
+    <div class="grillRow">
+      <div class="flame" aria-hidden="true">🔥</div>
+      <p>Pull up a log. Every marshmallow held out to the fire is one toasted in his name. <span id="fireCount">Nobody has toasted one yet.</span></p>
+    </div>
+    <form id="fireForm" novalidate>
+      <div class="row">
+        <input id="fireSig" type="text" maxlength="24" placeholder="Sign as (optional)" autocomplete="off" aria-label="Sign as">
+        <button id="fireBtn" type="submit">Toast a marshmallow</button>
+      </div>
+      <div id="fireStatus" class="status" aria-live="polite"></div>
+    </form>
+    <div id="fireRecent"></div>
   </div>
 </div>
 

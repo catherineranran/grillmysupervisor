@@ -14,6 +14,7 @@ import { createFlowers } from './flowers.js';
 import { Butterflies } from './butterflies.js';
 import { Fireflies } from './fireflies.js';
 import { Meteors } from './nightSky.js';
+import { Swallows } from './birds.js';
 import { Soundscape } from './audio.js';
 import { World } from './world.js';
 import { Flock } from './flock.js';
@@ -119,6 +120,7 @@ const flowers = createFlowers(U, { count: isTouch ? 3000 : 6500, size: 32 });
 scene.add(flowers);
 const butterflies = new Butterflies(scene, U, tuning, isTouch ? 3 : 5);   // in place of the original's bumblebees: a few, and silent
 const fireflies = new Fireflies(scene, isTouch ? 110 : 240);                // 萤火虫, over the meadow in the evenings
+const swallows = new Swallows(scene, U, isTouch ? 5 : 8);                  // wheeling over the meadow by day
 const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
@@ -141,6 +143,7 @@ const obstacles = [];
 const platformObstacles = [];
 for (let z = SITE.rect.z0 - 2; z <= SITE.rect.z1 + 2; z += 9) { const [wx, wz] = toWorld(-3.2, z); platformObstacles.push({ x: wx, z: wz, r: 10.5 }); }
 for (const t of TREES) { const [wx, wz] = toWorld(t.x, t.z); platformObstacles.push({ x: wx, z: wz, r: 0.7 }); }
+{ const [wx, wz] = toWorld(G.FIRE.x, G.FIRE.z); platformObstacles.push({ x: wx, z: wz, r: 2.6 }); }   // the alpacas keep off the campfire
 const MEADOW_SPOT = toWorld(-21, 4);
 let flock = null;
 const herdCtx = { cx: MEADOW_SPOT[0], cz: MEADOW_SPOT[1], fx: 0, fz: 1, cam: camera.position, frustum: new THREE.Frustum() };
@@ -286,6 +289,7 @@ function setHover(obj) {
       : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · send a greeting or an appreciation — it goes up on the wall'
       : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
       : hover.userData.kind === 'lock' ? '<b>' + key + '</b> · locked — password required'
+      : hover.userData.kind === 'fire' ? '<b>' + key + '</b> · toast a marshmallow for the supervisor'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -300,9 +304,10 @@ const gatePanel = $('gate'), listPanel = $('plist'), creditsPanel = $('credits')
 const lockPanel = $('lockp'), lockForm = $('lockForm'), lockText = $('lockText'), lockStatus = $('lockStatus');
 let mode = 'poster', current = null;
 let db = null, user = null, myId = null, isOwner = false, canWrite = null, dataMode = 'loading';
-let wallNotes = [], binNotes = [], grillNotes = [], signNotes = [];
+let wallNotes = [], binNotes = [], grillNotes = [], signNotes = [], fireNotes = [];
 const signPanel = $('signp'), signForm = $('signForm'), signName = $('signName'), signBtn = $('signBtn'), signStatus = $('signStatus'), signCount = $('signCount'), signList = $('signList');
 const grillPanel = $('grill'), grillForm = $('grillForm'), grillSig = $('grillSig'), grillBtn = $('grillBtn'), grillStatus = $('grillStatus'), grillCount = $('grillCount'), grillRecent = $('grillRecent');
+const firePanel = $('fire'), fireForm = $('fireForm'), fireSig = $('fireSig'), fireBtn = $('fireBtn'), fireStatus = $('fireStatus'), fireCount = $('fireCount'), fireRecent = $('fireRecent');
 const wishPanel = $('wish'), wishForm = $('wishForm'), wishText = $('wishText'), wishSig = $('wishSig'), wishBtn = $('wishBtn'), wishStatus = $('wishStatus'), wishCount = $('wishCount'), wishSee = $('wishSee');
 try { grillSig.value = wishSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 try { saySig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
@@ -342,10 +347,12 @@ const rest = {
     binNotes = rows.filter((x) => x && x.kind === 'bin').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     grillNotes = rows.filter((x) => x && x.kind === 'grill').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
     signNotes = rows.filter((x) => x && x.kind === 'sign').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
-    G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length); G.setSignatures(signNotes);
+    fireNotes = rows.filter((x) => x && x.kind === 'fire').map((x) => Object.assign({ id: String(x.id) }, clean(x)));
+    refreshScene();
     if (boardOpen && !board.hidden && !askingFor) renderBoard();
     if (!listPanel.hidden) renderList();
     if (!grillPanel.hidden) renderGrill();
+    if (!firePanel.hidden) renderFire();
     if (!wishPanel.hidden) renderWish();
     if (!signPanel.hidden && !askingFor) renderSign();
   },
@@ -392,20 +399,24 @@ if (!visitorToken) {
   dataMode = 'db';
   db.collection('wall').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     wallNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
-    G.redrawPosters(wallNotes, false); G.setWishes(wallNotes.length);
+    G.redrawPosters(wallNotes, false); G.setWishes(wallNotes.length); applyCounts();
     if (boardOpen && !board.hidden) renderBoard(); if (!listPanel.hidden) renderList(); if (!wishPanel.hidden) renderWish();
   }, (err) => { setStatus('The wall stopped updating (' + err.code + '). Reload to reconnect.'); });
   db.collection('bin').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     binNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
-    G.updateBin(binNotes.length); if (boardOpen && !board.hidden) renderBoard();
+    G.updateBin(binNotes.length); applyCounts(); if (boardOpen && !board.hidden) renderBoard();
   }, (err) => { setStatus('The bin stopped updating (' + err.code + '). Reload to reconnect.'); });
   db.collection('sign').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     signNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
-    G.setSignatures(signNotes); if (!signPanel.hidden) renderSign();
+    G.setSignatures(signNotes); applyCounts(); if (!signPanel.hidden) renderSign();
   }, () => {});
   db.collection('grill').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
     grillNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
-    G.setGrill(grillNotes.length); if (!grillPanel.hidden) renderGrill();
+    G.setGrill(grillNotes.length); applyCounts(); if (!grillPanel.hidden) renderGrill();
+  }, () => {});
+  db.collection('fire').orderBy('at', 'desc').limit(1000).onSnapshot((snap) => {
+    fireNotes = snap.docs.map((d) => Object.assign({ id: d.id }, clean(d.data())));
+    G.setFire(fireNotes.length); applyCounts(); if (!firePanel.hidden) renderFire();
   }, () => {});
   db.collection('posters').limit(100).onSnapshot((snap) => {
     applyTitles(snap.docs.map((d) => ({ n: d.id, title: (d.data() || {}).title })));
@@ -424,6 +435,7 @@ function openBoard(obj) {
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
   if (obj.userData.kind === 'lock') { openPanel(lockPanel); lockStatus.textContent = ''; lockText.value = ''; if (!isTouch) setTimeout(() => lockText.focus(), 50); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
+  if (obj.userData.kind === 'fire') { openPanel(firePanel); fireStatus.textContent = ''; renderFire(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
   if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); renderHands(); padRedraw(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
@@ -442,7 +454,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; askingFor = null; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel, firePanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -592,6 +604,37 @@ async function saveNote(kind, doc) {
   }
 }
 
+// ---------- the campfire ----------
+function renderFire() {
+  const n = fireNotes.length;
+  fireCount.textContent = n === 0 ? 'Nobody has toasted one yet — be the first.' : n === 1 ? 'One toasted so far.' : n + ' toasted so far' + (n > 12 ? ' (12 sticks fit round the fire at a time).' : '.');
+  const who = fireNotes.slice(0, 8).map((x) => x.sig || 'someone');
+  fireRecent.textContent = who.length ? 'Latest from: ' + who.join(', ') : '';
+  const ro = (dataMode === 'db' && canWrite === false);
+  fireForm.hidden = ro;
+  if (ro) fireStatus.textContent = 'Toasting one needs a contributor invitation to this corner.';
+  else if (dataMode === 'local' && !fireStatus.textContent) fireStatus.textContent = 'Not connected to the shared fire right now, so your marshmallow stays on this screen.';
+}
+fireForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (dataMode === 'loading') { fireStatus.textContent = 'Still connecting. Try again in a moment.'; return; }
+  const sig = fireSig.value.trim();
+  const doc = { text: '🔥', sig, author: myId, at: new Date().toISOString() };
+  fireBtn.disabled = true; fireStatus.textContent = 'Holding it to the fire…';
+  try {
+    await saveNote('fire', doc);
+    renderFire();
+    fireStatus.textContent = 'Toasted. Golden on one side.';
+    try { localStorage.setItem('wlr-sig', sig); } catch (err) {}
+  } catch (err) {
+    console.warn('marshmallow not saved', err);
+    if (err && err.code === 'invalid_argument') { canWrite = false; renderFire(); }
+    else fireStatus.textContent = 'Could not toast it. Try once more.';
+  }
+  fireBtn.disabled = false;
+});
+try { fireSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
+
 // ---------- the wish board ----------
 // a wish is a wall note; it goes on the emptiest poster, the nearest such to the board first, so the wall fills evenly
 const WISH_Z = -2.7;
@@ -722,8 +765,9 @@ function passwordForm(n, kind, status, rerender) {
   setTimeout(() => inp.focus(), 30);
   return f;
 }
-const listOf = (kind) => kind === 'wall' ? wallNotes : kind === 'bin' ? binNotes : kind === 'sign' ? signNotes : grillNotes;
-function refreshScene() { G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length); G.setSignatures(signNotes); }
+const listOf = (kind) => kind === 'wall' ? wallNotes : kind === 'bin' ? binNotes : kind === 'sign' ? signNotes : kind === 'fire' ? fireNotes : grillNotes;
+function applyCounts() { G.setStats({ wall: wallNotes.length, sign: signNotes.length, grill: grillNotes.length, bin: binNotes.length, fire: fireNotes.length }); }
+function refreshScene() { G.redrawPosters(wallNotes, false); G.updateBin(binNotes.length); G.setGrill(grillNotes.length); G.setWishes(wallNotes.length); G.setSignatures(signNotes); G.setFire(fireNotes.length); applyCounts(); }
 async function removeNote(n, password, kind, status, rerender) {
   kind = kind || (mode === 'poster' ? 'wall' : 'bin'); status = status || setStatus; rerender = rerender || renderBoard;
   try {
@@ -969,8 +1013,10 @@ const fwd = new THREE.Vector3(), rgt = new THREE.Vector3(), tmp = new THREE.Vect
 let lastFrame = 0, first = true, ambience = 0;
 const veil = $('veil');
 
+const fireWorld = (() => { const [x, z] = toWorld(G.FIRE.x, G.FIRE.z); return { x, y: SITE.H0 + G.FIRE.y + 0.4, z }; })();
 function frame() {
   if (window.__prof) window.__prof.frames = (window.__prof.frames || 0) + 1;   // headless test hook
+  if (sound.fire) { sound.fire.pos = fireWorld; sound.fire.level = 1; }
   const dt = Math.min(clock.getDelta(), 0.05);
   const time = (U.uTime.value += dt);
   cloudUniforms.uTime.value = time;
@@ -1020,6 +1066,9 @@ function frame() {
   G.tickBalloons(dt, time);
   G.tickFarDoor(dt);
   meteors.update(dt, starK);
+  G.tickFire(dt, time, 1 - dayK);
+  if (G.tickOwl(dt, time, 1 - dayK)) sound.owl(G.owlWorld.x, G.owlWorld.y, G.owlWorld.z);
+  swallows.update(dt, time, dayK);
 
   // the valley's sounds belong to the valley: silent in the gallery and on the terrace, fading in on the way down the steps
   const outdoors = onPlatform(player.x, player.z) ? 0
@@ -1068,5 +1117,5 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors });
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors, __birds: swallows });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));

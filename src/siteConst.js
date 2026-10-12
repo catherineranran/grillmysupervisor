@@ -19,6 +19,7 @@ export const SITE = {
   stair: { x0: -10.9, x1: -7.9, z0: -4.6, z1: -2.0 },  // the ground dips under the steps
   drop: 1.45,              // platform height above the meadow at its rim
   band: 16,                // metres over which the meadow blends back to the natural terrain
+  fire: { x: -42, z: -26, r: 1.9 },   // the campfire by the stream (local): trampled ground, no grass, within r
   H0: 0,                   // platform height (world); set by noise.js once the natural height is known
 };
 
@@ -49,6 +50,7 @@ const vec4 SITE_RECT = vec4(${f(SITE.rect.x0)}, ${f(SITE.rect.x1)}, ${f(SITE.rec
 const vec4 SITE_STAIR = vec4(${f(SITE.stair.x0)}, ${f(SITE.stair.x1)}, ${f(SITE.stair.z0)}, ${f(SITE.stair.z1)});
 // the grass keeps off the steps themselves (the terrain notch above is a little wider)
 const vec4 SITE_STEPS = vec4(-10.45, -7.95, -4.35, -2.25);
+const vec3 SITE_FIRE = vec3(${f(SITE.fire.x)}, ${f(SITE.fire.z)}, ${f(SITE.fire.r)});
 uniform float uSiteH0;
 vec2 siteLocal(vec2 p) {
   vec2 d = p - SITE_C;
@@ -59,7 +61,8 @@ float siteMask(vec2 p) {
   vec2 l = siteLocal(p);
   float onRect = step(SITE_RECT.x - 0.4, l.x) * step(l.x, SITE_RECT.y + 0.4) * step(SITE_RECT.z - 0.4, l.y) * step(l.y, SITE_RECT.w + 0.4);
   float onStair = step(SITE_STEPS.x, l.x) * step(l.x, SITE_STEPS.y) * step(SITE_STEPS.z, l.y) * step(l.y, SITE_STEPS.w);
-  return max(onRect, onStair);
+  float onFire = step(length(l - SITE_FIRE.xy), SITE_FIRE.z);
+  return max(max(onRect, onStair), onFire);
 }
 // how far outside the platform a point lies (0 on it)
 float siteOut(vec2 p) {

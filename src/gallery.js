@@ -1055,7 +1055,7 @@ M.step = new THREE.MeshStandardMaterial({color:0xcbc3b5, roughness:0.9});
 for(const t of TREES) addBox(t.x-0.32, t.x+0.32, t.z-0.32, t.z+0.32);   // the trunks
 
 // the gate to the Ili grassland (a separate world: vibe-shepherding)
-let gateHit;
+let gateHit, owl, owlHead; const owlEyes = [];
 {
   const GX = -27, GZ = -15, wood = new THREE.MeshStandardMaterial({color:0x8a6a48, roughness:0.85});
   const gg = new THREE.Group(); gg.position.set(GX, -1.47, GZ); world.add(gg);
@@ -1077,6 +1077,26 @@ let gateHit;
   const sign = mesh(new THREE.PlaneGeometry(1.6, 0.625), new THREE.MeshStandardMaterial({map:st, roughness:0.9, side:THREE.DoubleSide}), 0.02, 2.69, 0, true, true);
   sign.rotation.y = Math.PI/2; gg.add(sign);
   gg.add(mesh(new THREE.BoxGeometry(0.1, 0.1, 1.9), wood, 0, 3.06, 0));
+  // the owl: out on the end of the top beam at night, turning its head now and then, hooting every so often
+  {
+    const feather = new THREE.MeshStandardMaterial({color:0x4a3826, roughness:0.95, flatShading:true});
+    const pale = new THREE.MeshStandardMaterial({color:0x8a7357, roughness:0.95, flatShading:true});
+    const o = new THREE.Group(); o.position.set(0, 3.11, 0.72); o.rotation.y = -0.9; gg.add(o); owl = o;
+    const body = mesh(new THREE.SphereGeometry(1, 10, 8), feather, 0, 0.14, 0); body.scale.set(0.085, 0.14, 0.09); o.add(body);
+    const breast = mesh(new THREE.SphereGeometry(1, 10, 8), pale, 0, 0.12, 0.035, false, false); breast.scale.set(0.06, 0.1, 0.06); o.add(breast);
+    const head = new THREE.Group(); head.position.y = 0.27; o.add(head); owlHead = head;
+    head.add(mesh(new THREE.SphereGeometry(0.068, 12, 10), feather, 0, 0, 0));
+    for(const sx of [-1, 1]){
+      const tuft = mesh(new THREE.ConeGeometry(0.018, 0.05, 6), feather, sx*0.045, 0.06, -0.01); tuft.rotation.z = -sx*0.5; head.add(tuft);
+      head.add(mesh(new THREE.CircleGeometry(0.02, 12), pale, sx*0.026, 0.008, 0.062, false, false));
+      const eye = mesh(new THREE.SphereGeometry(0.011, 10, 8), new THREE.MeshStandardMaterial({color:0xffd34d, emissive:0xffb400, emissiveIntensity:1.4}), sx*0.026, 0.008, 0.07, false, false);
+      head.add(eye); owlEyes.push(eye);
+      head.add(mesh(new THREE.SphereGeometry(0.005, 8, 6), new THREE.MeshBasicMaterial({color:0x111111}), sx*0.026, 0.008, 0.08, false, false));
+    }
+    const beak = mesh(new THREE.ConeGeometry(0.009, 0.022, 6), new THREE.MeshStandardMaterial({color:0x2b2117}), 0, -0.012, 0.072, false, false); beak.rotation.x = Math.PI/2; head.add(beak);
+    for(const sx of [-1, 1]) o.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.05, 6), pale, sx*0.025, 0.02, 0.02, false, false));
+    o.visible = false;
+  }
   gateHit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.2, 2.6), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
   gateHit.position.y = 1.6; gateHit.userData = {kind:'gate'}; gg.add(gateHit);
   addBox(GX-0.1, GX+0.1, GZ-1.2, GZ-1.0); addBox(GX-0.1, GX+0.1, GZ+1.0, GZ+1.2);
@@ -1114,6 +1134,190 @@ const BALL_CAP = 40;
   world.add(balls);
 }
 
+
+// ---------- the tally, on the stone wall by where you start ----------
+let setStats;
+{
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const g = c.getContext('2d');
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+  const stats = { wall: 0, sign: 0, grill: 0, bin: 0, fire: 0 };
+  const draw = () => {
+    const W = c.width, H = c.height;
+    const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#141a2c'); bg.addColorStop(1, '#0b0f1c');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    const sheen = g.createRadialGradient(W*0.2, 0, 0, W*0.2, 0, W*0.9); sheen.addColorStop(0, 'rgba(120,150,220,0.18)'); sheen.addColorStop(1, 'rgba(120,150,220,0)');
+    g.fillStyle = sheen; g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(190,205,240,0.35)'; g.lineWidth = 3; g.strokeRect(14, 14, W-28, H-28);
+    g.textBaseline = 'middle';
+    g.fillStyle = 'rgba(190,205,240,0.75)'; g.font = '500 30px "DM Mono", ui-monospace, monospace'; g.textAlign = 'left';
+    g.fillText('SO FAR, FOR THE SUPERVISOR', 56, 70);
+    const rows = [['greetings', stats.wall, '#ffd27a'], ['signatures', stats.sign, '#9fe0ff'], ['sausages', stats.grill, '#ffa36b'], ['marshmallows', stats.fire, '#ffe7c2'], ['complaints', stats.bin, '#c9b8ff']];
+    rows.forEach(([label, n, col], i) => {
+      const y = 150 + i*74;
+      g.fillStyle = col; g.font = '700 58px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.textAlign = 'right'; g.fillText(String(n), 300, y);
+      g.shadowColor = col; g.shadowBlur = 18; g.fillText(String(n), 300, y); g.shadowBlur = 0;
+      g.fillStyle = 'rgba(232,236,248,0.9)'; g.font = '500 36px "DM Mono", ui-monospace, monospace'; g.textAlign = 'left'; g.fillText(label, 340, y);
+      g.fillStyle = 'rgba(190,205,240,0.15)'; g.fillRect(56, y + 36, W - 112, 1);
+    });
+    tex.needsUpdate = true;
+  };
+  draw();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+  const z = 2.5, y = 1.95;
+  world.add(mesh(new THREE.BoxGeometry(0.05, 0.62, 1.2), new THREE.MeshStandardMaterial({color:0x202226, roughness:0.4, metalness:0.5}), XW - 0.03, y, z));
+  const face = mesh(new THREE.PlaneGeometry(1.14, 0.57), new THREE.MeshStandardMaterial({map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.9, roughness:0.25}), XW - 0.058, y, z, false, false);
+  face.rotation.y = -Math.PI/2; world.add(face);
+  setStats = (counts) => { Object.assign(stats, counts); draw(); };
+}
+
+// ---------- the campfire by the stream ----------
+// Down on the meadow past the gate, a few metres from the bank: a ring of stones, logs to sit on, flames (three
+// crossed sheets of shader fire), sparks, smoke, a light that flickers at night, and marshmallows on sticks —
+// one per visitor who toasts one (a 'fire' note; up to 12 show round the fire, the pop-up carries the count).
+const FIRE = { x: SITE.fire.x, z: SITE.fire.z };
+let fireHit, setFire, tickFire, tickOwl, owlWorld;
+{
+  const [wx, wz] = toWorld(FIRE.x, FIRE.z);
+  const fy = heightAt(wx, wz) - SITE.H0;
+  FIRE.y = fy;
+  const fg = new THREE.Group(); fg.position.set(FIRE.x, fy, FIRE.z); world.add(fg);
+  const stone = new THREE.MeshStandardMaterial({color:0x7d7a74, roughness:0.95, flatShading:true});
+  const charred = new THREE.MeshStandardMaterial({color:0x2a211b, roughness:0.95});
+  for(let i=0;i<15;i++){
+    const a = i/15*Math.PI*2 + rr(-0.1, 0.1), r = 0.58 + rr(-0.03, 0.03), sc = rr(0.09, 0.15);
+    const st = mesh(new THREE.DodecahedronGeometry(1, 0), stone, Math.cos(a)*r, sc*0.45, Math.sin(a)*r); st.scale.set(sc*rr(1, 1.5), sc*0.8, sc*rr(0.9, 1.3)); st.rotation.set(rand()*3, rand()*3, rand()*3); fg.add(st);
+  }
+  const ash = mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshStandardMaterial({color:0x3b3733, roughness:1}), 0, 0.012, 0, false, true); ash.rotation.x = -Math.PI/2; fg.add(ash);
+  for(let i=0;i<4;i++){   // the logs on the fire, crossed
+    const log = mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.72, 9), M.bark, 0, 0.09 + i*0.03, 0);
+    log.rotation.set(0, i*0.8 + 0.3, Math.PI/2 - 0.18 + rr(-0.1, 0.1)); fg.add(log);
+    const end = mesh(new THREE.SphereGeometry(0.07, 8, 6), charred, Math.cos(i*0.8 + 0.3)*0.0, 0.11 + i*0.03, 0, false, false); end.scale.set(1, 0.6, 1); fg.add(end);
+  }
+  const embers = mesh(new THREE.CircleGeometry(0.3, 18), new THREE.MeshStandardMaterial({color:0x5a2a12, emissive:0xff6a1f, emissiveIntensity:1.2, roughness:1}), 0, 0.03, 0, false, false);
+  embers.rotation.x = -Math.PI/2; fg.add(embers);
+  // the flames
+  const flameVert = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+  const flameFrag = `
+    uniform float uTime; uniform float uSeed; uniform float uHeat;
+    varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+    float fbm(vec2 p){ return 0.5*noise(p) + 0.25*noise(p*2.03 + 1.7) + 0.125*noise(p*4.1 + 3.1); }
+    void main(){
+      vec2 uv = vUv;
+      float x = (uv.x - 0.5) * 2.0;
+      float n = fbm(vec2(uv.x*3.0 + uSeed, uv.y*3.5 - uTime*2.0 + uSeed*3.0));
+      float n2 = fbm(vec2(uv.x*5.0 - uSeed, uv.y*6.0 - uTime*3.0));
+      float width = (1.0 - uv.y*0.8) * (0.7 + 0.5*n);
+      float body = 1.0 - smoothstep(width*0.45, width, abs(x + (n2 - 0.5)*0.5*uv.y));
+      float tip = 1.0 - smoothstep(0.45 + 0.45*n, 1.0, uv.y);
+      float base = smoothstep(0.0, 0.1, uv.y);
+      float f = body * tip * base * uHeat;
+      float core = smoothstep(0.4, 1.0, f) * (1.0 - uv.y*0.6);
+      vec3 col = mix(vec3(0.85, 0.12, 0.01), vec3(1.0, 0.5, 0.06), smoothstep(0.08, 0.45, f));
+      col = mix(col, vec3(1.0, 0.93, 0.62), core);
+      gl_FragColor = vec4(col, f);
+    }`;
+  const flames = [];
+  for(let i=0;i<3;i++){
+    const mat = new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uSeed: { value: i*1.37 }, uHeat: { value: 1 } }, vertexShader: flameVert, fragmentShader: flameFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.05), mat); fl.position.y = 0.52; fl.rotation.y = i*Math.PI/3; fl.frustumCulled = false; fg.add(fl); flames.push(fl);
+  }
+  const light = new THREE.PointLight(0xff8c3c, 0, 10, 2); light.position.y = 0.6; fg.add(light);
+  // sparks
+  const NS = 48, sparkPos = new Float32Array(NS*3), sparkA = new Float32Array(NS), sparks = [];
+  for(let i=0;i<NS;i++) sparks.push({ t: rand()*1.6, life: rr(0.9, 1.8), x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+  const sparkGeo = new THREE.BufferGeometry();
+  sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3).setUsage(THREE.DynamicDrawUsage));
+  sparkGeo.setAttribute('aGlow', new THREE.BufferAttribute(sparkA, 1).setUsage(THREE.DynamicDrawUsage));
+  const sparkMat = new THREE.ShaderMaterial({ uniforms: { uPixelRatio: { value: 1 } },
+    vertexShader: `attribute float aGlow; uniform float uPixelRatio; varying float vG; void main(){ vG = aGlow; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = min(4.0 * (8.0 / max(-mv.z, 1.0)), 16.0) * uPixelRatio; gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying float vG; void main(){ float r = length(gl_PointCoord - 0.5) * 2.0; float a = smoothstep(1.0, 0.2, r) * vG; gl_FragColor = vec4(mix(vec3(1.0, 0.4, 0.05), vec3(1.0, 0.9, 0.5), vG), a); }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const sparkPts = new THREE.Points(sparkGeo, sparkMat); sparkPts.frustumCulled = false; fg.add(sparkPts);
+  // smoke
+  const sc = document.createElement('canvas'); sc.width = sc.height = 64; const sg = sc.getContext('2d');
+  const grd = sg.createRadialGradient(32,32,2,32,32,30); grd.addColorStop(0,'rgba(200,196,190,0.85)'); grd.addColorStop(1,'rgba(200,196,190,0)'); sg.fillStyle = grd; sg.fillRect(0,0,64,64);
+  const smokeTex = new THREE.CanvasTexture(sc); const puffs = [];
+  for(let i=0;i<6;i++){ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex, transparent:true, opacity:0.35, depthWrite:false})); sp.userData.t = i/6; fg.add(sp); puffs.push(sp); }
+  // logs to sit on, round the fire
+  const logEnd = new THREE.MeshStandardMaterial({color:0xb79a72, roughness:0.9});
+  for(const a of [0.4, 2.5, 4.4]){   // lying across the line to the fire, so you sit facing it
+    const cx = Math.cos(a)*1.55, cz = Math.sin(a)*1.55, ax = -Math.sin(a), az = Math.cos(a);
+    const seat = mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.4, 12), M.bark, cx, 0.17, cz); seat.rotation.set(0, Math.PI/2 - a, Math.PI/2); fg.add(seat);
+    for(const e of [-0.7, 0.7]){ const cap = mesh(new THREE.CircleGeometry(0.17, 12), logEnd, cx + ax*e, 0.17, cz + az*e, false, false); cap.rotation.y = -a + (e > 0 ? 0 : Math.PI); fg.add(cap); }
+    const ex = Math.abs(ax)*0.7 + Math.abs(az)*0.2, ez = Math.abs(az)*0.7 + Math.abs(ax)*0.2;
+    addBox(FIRE.x + cx - ex, FIRE.x + cx + ex, FIRE.z + cz - ez, FIRE.z + cz + ez);
+  }
+  addBox(FIRE.x - 0.62, FIRE.x + 0.62, FIRE.z - 0.62, FIRE.z + 0.62);
+  // marshmallows on sticks, held out towards the fire from round about
+  const mallowTex = makeTex(64, 32, (g, w, h) => { g.fillStyle = '#f7f1e8'; g.fillRect(0, 0, w, h); const t = g.createLinearGradient(0, 0, w, 0); t.addColorStop(0, 'rgba(120,70,30,0)'); t.addColorStop(0.55, 'rgba(120,70,30,0.15)'); t.addColorStop(1, 'rgba(90,45,15,0.85)'); g.fillStyle = t; g.fillRect(0, 0, w, h); });
+  const mallowMat = new THREE.MeshStandardMaterial({map:mallowTex, roughness:0.8});
+  const stickMat = new THREE.MeshStandardMaterial({color:0xcbb088, roughness:0.9});
+  const sticks = [];
+  for(let i=0;i<12;i++){
+    const a = 0.15 + i*(Math.PI*2/12) + rr(-0.06, 0.06), r0 = 1.25, r1 = 0.36, y0 = 0.62, y1 = 0.5;
+    const p0 = new THREE.Vector3(Math.cos(a)*r0, y0, Math.sin(a)*r0), p1 = new THREE.Vector3(Math.cos(a)*r1, y1, Math.sin(a)*r1);
+    const len = p0.distanceTo(p1);
+    const st = mesh(new THREE.CylinderGeometry(0.007, 0.009, len, 6), stickMat); st.position.copy(p0).add(p1).multiplyScalar(0.5);
+    st.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p1.clone().sub(p0).normalize());
+    const mm = mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.052, 14), mallowMat, 0, 0, 0); mm.position.copy(p1); mm.quaternion.copy(st.quaternion); mm.rotation.y += rand()*3;
+    const grp = new THREE.Group(); grp.add(st, mm); grp.visible = false; fg.add(grp); sticks.push(grp);
+  }
+  setFire = (n) => { for(let i=0;i<sticks.length;i++) sticks[i].visible = i < n; };
+  // the little sign on a post, facing the way you come from the gate
+  const signTex = makeTex(512, 256, (g, w, h) => {
+    g.fillStyle = '#e9dcc2'; g.fillRect(0, 0, w, h); g.strokeStyle = '#6b5236'; g.lineWidth = 10; g.strokeRect(5, 5, w-10, h-10);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = '#2b3a2a'; g.font = '700 58px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText('Toast a marshmallow', w/2, 84);
+    g.fillStyle = '#5d554d'; g.font = '500 30px "DM Mono", ui-monospace, monospace'; g.fillText('for the supervisor — ' + (isTouch ? 'tap the fire' : 'E at the fire'), w/2, 168);
+  });
+  const post = new THREE.Group(); post.position.set(2.35, 0, 0.35); post.rotation.y = -0.85; fg.add(post);
+  post.add(mesh(new THREE.CylinderGeometry(0.03, 0.035, 1.1, 8), M.bark, 0, 0.55, 0));
+  post.add(mesh(new THREE.PlaneGeometry(0.7, 0.35), new THREE.MeshStandardMaterial({map:signTex, roughness:0.9, side:THREE.DoubleSide}), 0, 1.05, 0.02));
+  addBox(FIRE.x + 2.35 - 0.08, FIRE.x + 2.35 + 0.08, FIRE.z + 0.35 - 0.08, FIRE.z + 0.35 + 0.08);
+  fireHit = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 1.7, 12), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+  fireHit.position.y = 0.85; fireHit.userData = {kind:'fire'}; fg.add(fireHit);
+  tickFire = (dt, time, night) => {
+    const flicker = 0.78 + 0.14*Math.sin(time*11.3) + 0.08*Math.sin(time*17.7 + 1.0);
+    light.intensity = 7 * flicker * (0.15 + 0.85*night);
+    embers.material.emissiveIntensity = 0.9 + 0.5*flicker;
+    for(const fl of flames) fl.material.uniforms.uTime.value = time;
+    for(let i=0;i<NS;i++){
+      const s = sparks[i]; s.t += dt;
+      if(s.t > s.life){ s.t = 0; s.life = rr(0.8, 1.9); s.x = rr(-0.12, 0.12); s.y = rr(0.3, 0.6); s.z = rr(-0.12, 0.12); s.vx = rr(-0.35, 0.35); s.vy = rr(0.9, 1.9); s.vz = rr(-0.35, 0.35); }
+      s.vx += Math.sin(time*7 + i)*0.9*dt; s.vz += Math.cos(time*6 + i*1.3)*0.9*dt; s.vy -= 0.15*dt;
+      s.x += s.vx*dt; s.y += s.vy*dt; s.z += s.vz*dt;
+      sparkPos[i*3] = s.x; sparkPos[i*3+1] = s.y; sparkPos[i*3+2] = s.z;
+      sparkA[i] = Math.max(0, 1 - s.t/s.life) * (0.5 + 0.5*night);
+    }
+    sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.aGlow.needsUpdate = true;
+    for(const sp of puffs){
+      sp.userData.t += dt*0.18; if(sp.userData.t > 1) sp.userData.t -= 1;
+      const t = sp.userData.t;
+      sp.position.set(Math.sin(t*6)*0.12 + t*0.35, 0.9 + t*2.0, Math.cos(t*5)*0.1);
+      const sz = 0.3 + t*0.9; sp.scale.set(sz, sz, 1);
+      sp.material.opacity = 0.3*(1-t)*(t < 0.12 ? t/0.12 : 1);
+    }
+  };
+  // the owl: out at night, head turning, a blink now and then; returns true on the frames it hoots
+  let owlNext = 25 + rand()*20, owlBlink = 3 + rand()*4, owlPuff = 0;
+  owlWorld = (() => { const [ox, oz] = toWorld(-27, -15 + 0.72); return { x: ox, y: SITE.H0 - 1.47 + 3.11 + 0.3, z: oz }; })();
+  tickOwl = (dt, time, night) => {
+    if(!owl) return false;
+    owl.visible = night > 0.35;
+    if(!owl.visible) return false;
+    owlHead.rotation.y = Math.sin(time*0.25)*0.7 + Math.sin(time*0.9)*0.15;
+    owlBlink -= dt;
+    const blinking = owlBlink < 0.14;
+    for(const e of owlEyes) e.scale.y = blinking ? 0.12 : 1;
+    if(owlBlink < 0) owlBlink = 3 + rand()*5;
+    if(owlPuff > 0){ owlPuff -= dt; const k = 1 + 0.08*Math.sin(Math.PI*Math.max(0, owlPuff)/0.5); owl.scale.set(k, k, k); } else owl.scale.set(1, 1, 1);
+    owlNext -= dt;
+    if(owlNext < 0 && night > 0.5){ owlNext = 22 + rand()*28; owlPuff = 0.5; return true; }
+    return false;
+  };
+}
 
 // ---------- the room at the very back: Ranran's, behind a locked door ----------
 // Through the far door of the corridor, the full width of the platform and ten metres deep. The far wall is glass
@@ -1460,7 +1664,8 @@ return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
   groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, guideBalloons, M, T,
   ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setDaylight, setScreen, screens,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit]),
+  setStats, FIRE, fireHit, setFire, tickFire, tickOwl, owlWorld,
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit, fireHit]),
   XG, XW, Z0, Z1, H, L,
 };
 }
