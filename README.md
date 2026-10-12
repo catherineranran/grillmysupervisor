@@ -13,9 +13,11 @@ The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flo
 | `page.html` | The page as written (full document). `index.html` is built from it with the notes backend filled in |
 | `index.html` | What the site serves |
 | `src/app.js` | Wires it all up: renderer, lights, the walk, posters and bin, shared notes, quality levels |
-| `src/gallery.js` | The gallery: corridor, glazing and its three doors, leather chesterfields and shelves, banner, the landscape glass note boards, decals, plants, the wish board, the birthday signature board (balloons, bunting, names in eight handwriting fonts or drawn by hand), the four numbered guide balloons, the grill and its board, terrace, the trees along it, steps, bin, gate |
+| `src/gallery.js` | The gallery: corridor, glazing and its three doors, leather chesterfields and shelves, banner, the landscape glass note boards, decals, plants, the greeting board, the birthday signature board (balloons, bunting, names in eight handwriting fonts or drawn by hand), the four numbered guide balloons, the grill and its board, terrace, the trees along it, steps, bin, gate — and Ranran's room behind the far door: the hinged door and its lock, the wall of glass, the snow-mountain chamber (painted panorama, snow, spruces), the four standing screens (`setScreen(i, url)` puts a picture on one) |
 | `src/siteConst.js` | Where the gallery stands in the valley and the shape of its platform (shared by the JS and GLSL terrain) |
 | `src/butterflies.js` | A handful of butterflies over the meadow (in place of the engine's bumblebees, `bees.js`, which is kept but unused): flower-to-flower flight, eyespots, silent |
+| `src/fireflies.js` | 萤火虫: blinking fireflies drifting over the meadow from dusk to dawn, never on the platform |
+| `src/nightSky.js` | Shooting stars on the night dome (every 4.5–11 s, white head, pale-blue tail), after the starry background of ranranli.net; the twinkling tinted stars, the Milky Way and the four-pointed sparkles are in `sky.js` |
 | `src/*` (the rest) | The vibe-shepherding engine: `terrain`, `world`, `grass`, `flowers`, `scenery`, `rivers`, `sky`, `bees`, `audio`, `music*`, `post`, `flock`, `sheep*`, `config`, `tuning`, `noise*`, `shaders`, `materials` — lightly patched so the terrain is level under the platform and no grass grows on it |
 | `assets/` | Banner atlas, bow, logos, tulip, the supervisor's avatar (`avatar.png`) and its sausage wrap (`sausage.png`), `alpaca.pack.txt` (the encrypted alpaca model, base64) and the bleat recordings |
 | `tuning.json` | The look tuning from vibe-shepherding |
@@ -24,9 +26,10 @@ The valley, grass, wildflowers, stream, lake, mountains, sky, sounds and the flo
 
 ## Controls
 
-- **Desktop:** click the scene to look around, `W A S D` to walk, `Shift` to walk faster, `E` (or click) to read a poster, open the bin or add a sausage at the grill board, `P` for the list of all posters, `[` `]` to move the clock, `Esc` to free the cursor.
+- **Desktop:** click the scene to look around, `W A S D` to walk, `Shift` to walk faster, `E` (or click) to read a poster, open the bin, add a sausage at the grill board or try the locked door, `P` for the list of all posters, `[` `]` to move the clock, `Esc` to free the cursor.
 - **Phone:** left thumb walks, right thumb looks, tap a poster, the bin or the grill board; the Posters button lists them all.
-- **The clock** (top right) runs 00:00–24:00: the sun rises at six and sets at eight, the moon and the stars take over at night, and the standing lamps burn from 18:00 to 06:00. The valley's sounds are heard only once you step down onto the grass.
+- **The clock** (top right) runs 00:00–24:00: the sun rises at six and sets at eight, the moon and the stars take over at night, and the standing lamps burn from 18:00 to 06:00. The valley's sounds are heard only once you step down onto the grass. In the evenings the sky fills with twinkling stars, the Milky Way and the odd shooting star, and fireflies come out over the grassland.
+- **Ranran's room** is behind the door at the far end of the corridor. The door asks for a password (checked in the page itself — `ROOM_PASSWORD` in `src/app.js`; it is a game, not a vault). Inside: a wall of glass onto snow mountains, and four standing screens whose environments are still to come.
 
 ## Shared notes (Supabase)
 
