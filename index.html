@@ -160,6 +160,12 @@ body.locked #cross{opacity:1}
 #say input,#wishForm input{flex:1 1 150px}
 #wishBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:#b5482f;color:#fff6ee;white-space:nowrap}
 #wishBtn:disabled{opacity:.55;cursor:default}
+#lockForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#lockForm input{flex:1 1 160px;font:15px/1.4 var(--display);color:var(--ink);padding:10px 12px;border:1px solid var(--glass-line);border-radius:8px;background:rgba(255,255,255,.72);min-width:0;letter-spacing:.08em;-webkit-user-select:text;user-select:text}
+#lockBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:var(--ink);color:#f7f4ef;white-space:nowrap}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
+.card.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97) both}
+@media (prefers-reduced-motion:reduce){.card.shake{animation:none}}
 #sayBtn{font:600 14px var(--display);padding:11px 18px;border-radius:999px;border:0;cursor:pointer;background:var(--ink);color:#f7f4ef;white-space:nowrap}
 #sayBtn:disabled{opacity:.55;cursor:default}
 #board.bin #sayBtn{background:#4a4542}
@@ -249,6 +255,20 @@ body.locked #cross{opacity:1}
     <h2 id="gateTitle">The herding grounds lie past this gate</h2>
     <p>This valley is forked from Ranran's other world, <em>Herding Alpacas on the Ili Grassland</em>. Over there you walk the endless valley with a flock that follows you and can name the alpacas after whoever annoyed you today. It lives on its own page, so crossing opens it in a new tab.</p>
     <a id="gateGo" class="go" href="https://ranranli.net/vibe-shepherding/" target="_blank" rel="noopener">Cross over →</a>
+  </div>
+</div>
+
+<div id="lockp" class="overlay" hidden>
+  <div class="card panel" role="dialog" aria-modal="true" aria-labelledby="lockTitle">
+    <button class="close" data-close type="button" aria-label="Back to the hall">×</button>
+    <div class="eyebrow">A locked door</div>
+    <h2 id="lockTitle">Ranran's room</h2>
+    <p>The room at the very back is hers. It has a wall of glass onto the snow mountains and four screens waiting for their worlds. If you know the password, say it and the door will open.</p>
+    <form id="lockForm" autocomplete="off">
+      <input id="lockText" type="password" placeholder="the password" maxlength="40" autocomplete="off" aria-label="Password">
+      <button id="lockBtn" type="submit">Open the door</button>
+    </form>
+    <p class="status" id="lockStatus" aria-live="polite"></p>
   </div>
 </div>
 

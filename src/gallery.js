@@ -150,8 +150,9 @@ const M = {
   floor: withClouds(new THREE.MeshStandardMaterial({map:woodTex, roughness:0.58, metalness:0})),
   stone: withClouds(new THREE.MeshStandardMaterial({map:stoneTex, roughness:0.92})),
   planter: withClouds(new THREE.MeshStandardMaterial({map:planterTex, roughness:0.95})),
-  ceiling: new THREE.MeshStandardMaterial({color:0xf2f0ec, roughness:0.95}),
-  plaster: new THREE.MeshStandardMaterial({color:0xece8e2, roughness:0.95}),
+  // the slabs and walls cast with both faces, so no sun leaks in along the ceiling line or the corners
+  ceiling: new THREE.MeshStandardMaterial({color:0xf2f0ec, roughness:0.95, shadowSide:THREE.DoubleSide}),
+  plaster: new THREE.MeshStandardMaterial({color:0xece8e2, roughness:0.95, shadowSide:THREE.DoubleSide}),
   frame: new THREE.MeshStandardMaterial({color:0xe4e6e5, roughness:0.38, metalness:0.35}),
   frameDark: new THREE.MeshStandardMaterial({color:0x8c8f90, roughness:0.4, metalness:0.5}),
   glass: new THREE.MeshPhysicalMaterial({color:0xdfeaf0, roughness:0.04, metalness:0, transparent:true, opacity:0.1, depthWrite:false, side:THREE.DoubleSide}),
@@ -244,12 +245,8 @@ wall.rotation.y = -Math.PI/2; world.add(wall);
 // back of wall (so it blocks light from inside view)
 world.add(mesh(new THREE.BoxGeometry(0.3, H, L), M.plaster, XW+0.16, H/2, ZC, true, false));
 
-// end walls
+// the near end wall (the far one, with the door to Ranran's room, is built with the room below)
 world.add(mesh(new THREE.BoxGeometry(4.4, H, 0.25), M.plaster, 0, H/2, Z0+0.12));
-world.add(mesh(new THREE.BoxGeometry(4.4, H, 0.25), M.plaster, 0, H/2, Z1-0.12));
-// far door
-world.add(mesh(new THREE.BoxGeometry(1.2, 2.4, 0.05), M.door, 0.6, 1.2, Z1+0.02, false, true));
-world.add(mesh(new THREE.BoxGeometry(0.03, 0.25, 0.06), M.chrome, 0.1, 1.05, Z1+0.05, false, false));
 
 // glazing
 for(const [za, zb] of BAYS) world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, za-zb), M.frame, XG, 0.035, (za+zb)/2));
@@ -289,7 +286,7 @@ const terrace = mesh(new THREE.PlaneGeometry(7.1, L+10), M.pave, XG-3.55, -0.02,
 terrace.rotation.x = -Math.PI/2; world.add(terrace);
 // planter wall with ivy
 planterTex.repeat.set((L+10)/2.75, 1/2.75);
-for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1-5]]){
+for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1]]){   // the terrace ends at the back room's wall
   world.add(mesh(new THREE.BoxGeometry(0.7, 1.0, za-zb), M.planter, -8.35, 0.48, (za+zb)/2));
   world.add(mesh(new THREE.BoxGeometry(0.62, 0.02, za-zb), M.soil, -8.35, 0.99, (za+zb)/2, false, true));
 }
@@ -304,8 +301,8 @@ for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1-5]]){
   seg(R.x1, R.x1 + t, R.z0 - t, R.z1 + t);        // behind the stone wall
   seg(R.x0, R.x1, R.z0 - t, R.z0);                // the two ends
   seg(R.x0, R.x1, R.z1, R.z1 + t);
-  // the terrace beyond the corridor ends
-  for(const [za, zb] of [[Z0+5, Z0], [Z1, Z1-5]]){ const p = mesh(new THREE.PlaneGeometry(4.6, za-zb), M.pave, 0.3, -0.02, (za+zb)/2, false, true); p.rotation.x = -Math.PI/2; world.add(p); }
+  // the terrace beyond the corridor's near end (the far end is the back room)
+  { const p = mesh(new THREE.PlaneGeometry(4.6, 5), M.pave, 0.3, -0.02, Z0+2.5, false, true); p.rotation.x = -Math.PI/2; world.add(p); }
 }
 
 // ivy
@@ -315,7 +312,7 @@ for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1-5]]){
   const ivy = new THREE.InstancedMesh(ivyGeo, new THREE.MeshStandardMaterial({flatShading:true, roughness:0.9}), n);
   const d = new THREE.Object3D(), col = new THREE.Color();
   for(let i=0;i<n;i++){
-    let z; do { z = Z0 + 5 - rand()*(L+10); } while(z > STAIR.z1 - 0.25 && z < STAIR.z0 + 0.25);
+    let z; do { z = Z0 + 5 - rand()*(L+5); } while(z > STAIR.z1 - 0.25 && z < STAIR.z0 + 0.25);
     const spill = rand() < 0.35;
     if(spill){ d.position.set(-7.98 - rand()*0.04, rr(0.2, 1.0), z); }
     else { d.position.set(rr(-8.7,-7.95), rr(1.0, 1.55) - (rand()<0.3?0:0), z); }
@@ -451,8 +448,8 @@ function sideTable(zc){
   addBox(1.42, 1.82, zc-0.2, zc+0.2);
 }
 
-function plant(zc){
-  const g = new THREE.Group(); g.position.set(1.48, 0, zc);
+function plant(zc, x = 1.48){
+  const g = new THREE.Group(); g.position.set(x, 0, zc);
   g.add(mesh(new THREE.CylinderGeometry(0.34, 0.27, 0.5, 28), M.pot, 0, 0.25, 0));
   g.add(mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.02, 28), M.soil, 0, 0.49, 0, false, true));
   const leafGeo = new THREE.PlaneGeometry(0.62, 0.62); leafGeo.translate(0, 0.31, 0);
@@ -474,7 +471,7 @@ function plant(zc){
   for(let i=0;i<18;i++) addLeaf(leafGeo, M.monstera, rr(0.45, 1.65), rand()*Math.PI*2, rr(0.5, 1.25), rr(-0.3,0.3));
   for(let i=0;i<4;i++) addLeaf(banGeo, M.banana, rr(1.2, 1.7), rand()*Math.PI*2, rr(0.15, 0.55), rr(-0.2,0.2));
   world.add(g);
-  addBox(1.08, 2, zc-0.42, zc+0.42);
+  addBox(x-0.4, x+0.4, zc-0.42, zc+0.42);
 }
 
 // the tulip from Ranran's website, potted: two crossed cut-out planes (the drawing's mound is cropped so the stems sit in the soil)
@@ -499,8 +496,8 @@ function tulipPlant(zc){
 }
 
 const lampLights = [];
-function lamp(zc){
-  const g = new THREE.Group(); g.position.set(1.18, 0, zc);
+function lamp(zc, x = 1.18){
+  const g = new THREE.Group(); g.position.set(x, 0, zc);
   g.add(mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.025, 24), M.chrome, 0, 0.012, 0));
   g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 1.3, 8), M.chrome, 0, 0.66, 0));
   const shadeMat = new THREE.MeshStandardMaterial({color:0xd9a33a, emissive:0xe79a2a, emissiveIntensity:0.85, roughness:0.7, side:THREE.DoubleSide, transparent:true, opacity:0.96});
@@ -511,7 +508,7 @@ function lamp(zc){
   const pl = new THREE.PointLight(0xffb45a, 0.9, 5.5, 2); pl.position.y = 1.45; g.add(pl);
   lampLights.push({light:pl, mat:shadeMat});
   world.add(g);
-  addBox(1.0, 1.36, zc-0.18, zc+0.18);
+  addBox(x-0.18, x+0.18, zc-0.18, zc+0.18);
 }
 
 function doorway(zc){
@@ -1052,7 +1049,7 @@ M.step = new THREE.MeshStandardMaterial({color:0xcbc3b5, roughness:0.9});
     world.add(mesh(new THREE.BoxGeometry(run, hgt, w), M.step, xa - run/2, -1.4 + hgt/2, zc, true, true));
   }
   for(const z of [STAIR.z0, STAIR.z1]) world.add(mesh(new THREE.BoxGeometry(2.4, 1.42, 0.12), M.step, STAIR.top - 1.2, -0.69, z + (z===STAIR.z0 ? 0.06 : -0.06), true, true));
-  addBox(-9.1, STAIR.top, STAIR.z0, Z0+5); addBox(-9.1, STAIR.top, Z1-5, STAIR.z1);
+  addBox(-9.1, STAIR.top, STAIR.z0, Z0+5); addBox(-9.1, STAIR.top, Z1, STAIR.z1);
   addBox(STAIR.bottom, STAIR.top, STAIR.z0, STAIR.z0+0.15); addBox(STAIR.bottom, STAIR.top, STAIR.z1-0.15, STAIR.z1);
 }
 for(const t of TREES) addBox(t.x-0.32, t.x+0.32, t.z-0.32, t.z+0.32);   // the trunks
@@ -1115,6 +1112,252 @@ const BALL_CAP = 40;
   balls.instanceMatrix.needsUpdate = true;
   balls.count = 0; balls.castShadow = true; balls.receiveShadow = true; balls.frustumCulled = false;
   world.add(balls);
+}
+
+
+// ---------- the room at the very back: Ranran's, behind a locked door ----------
+// Through the far door of the corridor, the full width of the platform and ten metres deep. The far wall is glass
+// from floor to ceiling and looks out on snow mountains: beyond the glass is a closed chamber painted as a
+// panorama all the way round, with snow and a few spruces in front of it for depth. Four standing projection
+// screens wait for their environments (setScreen(i, url) puts a picture on one).
+const ROOM = { x0: -8.75, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside faces; z1 is the line of the glass
+const VIEW = { z1: Z1 - 20.25, h: 6.2 };                             // the chamber beyond the glass
+const FARDOOR = { x0: 0.0, x1: 1.2, h: 2.4, angle: 0, target: 0, open: false, pivot: null, box: null };
+let lockHit, setDaylight, setScreen, openFarDoor, tickFarDoor;
+const screens = [];
+{
+  const OUT0 = -9.1, OUT1 = 2.35, endZ = Z1 - 0.12;
+  // the corridor's far end wall, now right across the platform, with the doorway in it
+  for(const [a, b, y0, y1] of [[ROOM.x0, FARDOOR.x0, 0, H + 0.4], [FARDOOR.x1, XW, 0, H + 0.4], [FARDOOR.x0, FARDOOR.x1, FARDOOR.h, H + 0.4]])   // up to the roof, so no light leaks in over it
+    world.add(mesh(new THREE.BoxGeometry(b - a, y1 - y0, 0.25), M.plaster, (a + b)/2, (y0 + y1)/2, endZ));
+  for(const dz of [-0.14, 0.14]){
+    world.add(mesh(new THREE.BoxGeometry(FARDOOR.x1 - FARDOOR.x0 + 0.2, 0.1, 0.06), M.doorFrame, (FARDOOR.x0 + FARDOOR.x1)/2, FARDOOR.h + 0.05, endZ + dz, false, true));
+    for(const x of [FARDOOR.x0 - 0.05, FARDOOR.x1 + 0.05]) world.add(mesh(new THREE.BoxGeometry(0.1, FARDOOR.h + 0.1, 0.06), M.doorFrame, x, (FARDOOR.h + 0.1)/2, endZ + dz, false, true));
+  }
+  // the door: hinged on the left post, on the room side of the wall, swinging into the room
+  const pivot = new THREE.Group(); pivot.position.set(FARDOOR.x0, 0, Z1 - 0.28); world.add(pivot); FARDOOR.pivot = pivot;
+  const lw = FARDOOR.x1 - FARDOOR.x0 - 0.06;
+  pivot.add(mesh(new THREE.BoxGeometry(lw, FARDOOR.h - 0.05, 0.05), M.door, 0.03 + lw/2, (FARDOOR.h - 0.05)/2 + 0.01, 0));
+  for(const s of [-1, 1]){
+    for(const [py, ph] of [[0.72, 0.95], [1.72, 0.8]]) pivot.add(mesh(new THREE.BoxGeometry(lw - 0.28, ph, 0.016), M.doorFrame, 0.03 + lw/2, py, s*0.03, false, false));
+    pivot.add(mesh(new THREE.BoxGeometry(0.03, 0.25, 0.06), M.chrome, lw - 0.1, 1.05, s*0.05, false, false));
+  }
+  for(const y of [0.4, 2.0]) world.add(mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8), M.chrome, FARDOOR.x0, y, Z1 - 0.28, false, false));
+  // the plate beside the door
+  const plateTex = makeTex(512, 128, (g, w, h) => {
+    g.fillStyle = '#c9a85c'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(80,60,20,0.5)'; g.lineWidth = 6; g.strokeRect(8, 8, w-16, h-16);
+    g.fillStyle = '#3a2d12'; g.font = '600 46px "DM Mono", ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText("RANRAN'S ROOM", w/2, h/2 + 2);
+  });
+  world.add(mesh(new THREE.PlaneGeometry(0.44, 0.11), new THREE.MeshStandardMaterial({map:plateTex, roughness:0.35, metalness:0.6}), FARDOOR.x0 - 0.42, 1.72, Z1 + 0.007, false, false));
+  // the lock: looking at the door asks for the password
+  lockHit = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.8), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+  lockHit.position.set((FARDOOR.x0 + FARDOOR.x1)/2, 1.25, endZ); lockHit.userData = {kind:'lock'}; world.add(lockHit);
+  addBox(OUT0, FARDOOR.x0, Z1 - 0.245, Z1 + 0.005); addBox(FARDOOR.x1, 2.6, Z1 - 0.245, Z1 + 0.005);
+  FARDOOR.box = {minX: FARDOOR.x0, maxX: FARDOOR.x1, minZ: Z1 - 0.32, maxZ: Z1 - 0.245}; colliders.push(FARDOOR.box);
+  openFarDoor = () => {
+    if(FARDOOR.open) return;
+    FARDOOR.open = true; FARDOOR.target = 2.9;
+    Object.assign(FARDOOR.box, {minX: FARDOOR.x0 - lw - 0.1, maxX: FARDOOR.x0 + 0.06, minZ: Z1 - 0.52, maxZ: Z1 - 0.245});   // the leaf, lying back against the wall
+  };
+  tickFarDoor = (dt) => {
+    FARDOOR.angle += THREE.MathUtils.clamp(FARDOOR.target - FARDOOR.angle, -1.6*dt, 1.6*dt);
+    pivot.rotation.y = FARDOOR.angle;
+  };
+
+  // the room: oak floor, stone on the right like the corridor, plaster elsewhere, a ceiling at the corridor's height
+  const roomWood = woodTex.clone(); roomWood.needsUpdate = true; roomWood.repeat.set((ROOM.x1 - ROOM.x0)/1.6, (ROOM.z0 - ROOM.z1)/1.6);
+  const rf = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, ROOM.z0 - ROOM.z1), withClouds(new THREE.MeshStandardMaterial({map:roomWood, roughness:0.58})), (ROOM.x0 + ROOM.x1)/2, 0, (ROOM.z0 + ROOM.z1)/2, false, true);
+  rf.rotation.x = -Math.PI/2; world.add(rf);
+  const roomStone = stoneTex.clone(); roomStone.needsUpdate = true; roomStone.repeat.set((ROOM.z0 - ROOM.z1)/2.75, H/2.75);
+  const rs = mesh(new THREE.PlaneGeometry(ROOM.z0 - ROOM.z1, H), withClouds(new THREE.MeshStandardMaterial({map:roomStone, roughness:0.92})), XW - 0.005, H/2, (ROOM.z0 + ROOM.z1)/2, false, true);
+  rs.rotation.y = -Math.PI/2; world.add(rs);
+  const roomLen = Z1 + 0.005 - ROOM.z1, roomZc = (Z1 + 0.005 + ROOM.z1)/2;
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x0 - OUT0, H + 0.4, roomLen), M.plaster, (OUT0 + ROOM.x0)/2, (H + 0.4)/2, roomZc));
+  world.add(mesh(new THREE.BoxGeometry(OUT1 - XW, H + 0.4, roomLen), M.plaster, (XW + OUT1)/2, (H + 0.4)/2, roomZc));
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, 0.4, (Z1 - 0.2) - ROOM.z1), M.ceiling, (ROOM.x0 + ROOM.x1)/2, H + 0.2, ((Z1 - 0.2) + ROOM.z1)/2));
+  // the wall of glass
+  const gw = ROOM.x1 - ROOM.x0, gxc = (ROOM.x0 + ROOM.x1)/2;
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(gw, H), M.glass); pane.position.set(gxc, H/2, ROOM.z1); pane.renderOrder = 2; world.add(pane);
+  world.add(mesh(new THREE.BoxGeometry(gw, 0.08, 0.2), M.frame, gxc, 0.04, ROOM.z1));
+  world.add(mesh(new THREE.BoxGeometry(gw, 0.16, 0.22), M.frame, gxc, H - 0.08, ROOM.z1));
+  for(let k = 1; k < 5; k++) world.add(mesh(new THREE.BoxGeometry(0.12, H, 0.14), M.frame, ROOM.x0 + gw*k/5, H/2, ROOM.z1));
+  // a rug in the middle of the room
+  const rugTex = makeTex(512, 384, (g, w, h) => {
+    g.fillStyle = '#7a3b35'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#d9b26a'; g.lineWidth = 10; g.strokeRect(22, 22, w-44, h-44); g.lineWidth = 3; g.strokeRect(44, 44, w-88, h-88);
+    g.fillStyle = 'rgba(217,178,106,0.35)';
+    for(let i=0;i<9;i++) for(let j=0;j<7;j++){ const x = 70 + i*46, y = 70 + j*38; g.beginPath(); g.moveTo(x, y-10); g.lineTo(x+10, y); g.lineTo(x, y+10); g.lineTo(x-10, y); g.closePath(); g.fill(); }
+    for(let i=0;i<4000;i++){ g.fillStyle = `rgba(${rand()<0.5?40:230},${rand()<0.5?20:200},${rand()<0.5?20:150},0.06)`; g.fillRect(rand()*w, rand()*h, 2, 2); }
+  });
+  const rug = mesh(new THREE.PlaneGeometry(4.4, 3.2), new THREE.MeshStandardMaterial({map:rugTex, roughness:1}), (ROOM.x0 + ROOM.x1)/2, 0.006, (ROOM.z0 + ROOM.z1)/2 - 0.4, false, true);
+  rug.rotation.x = -Math.PI/2; world.add(rug);
+  lamp(ROOM.z1 + 0.7, ROOM.x0 + 0.5); lamp(ROOM.z1 + 0.7, ROOM.x1 - 0.55);
+  plant(Z1 - 1.3, ROOM.x0 + 0.55);
+
+  // the four standing screens, two along each side wall, turned a little towards the door
+  function screenTex(i){
+    const looks = [['#f7d9c4', '#8fb4dc', '#f2b27a'], ['#dcebd2', '#2f6b57', '#cfe3a6'], ['#d4e9f4', '#1f5f8b', '#9dd3e8'], ['#f3c9a3', '#4a3d7a', '#e58f7a']];
+    const [top, bottom, glow] = looks[i % looks.length];
+    return makeTex(1024, 576, (g, w, h) => {
+      const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, top); sky.addColorStop(1, bottom); g.fillStyle = sky; g.fillRect(0, 0, w, h);
+      const sun = g.createRadialGradient(w*0.68, h*0.58, 0, w*0.68, h*0.58, h*0.5); sun.addColorStop(0, glow); sun.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = sun; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.moveTo(0, h*0.72);
+      for(let x = 0; x <= w; x += 16) g.lineTo(x, h*0.72 - Math.abs(Math.sin(x*0.004 + i)*40 + Math.sin(x*0.013 + i*2)*14));
+      g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(0, 0, w, h);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = 'rgba(20,24,32,0.78)'; g.font = '500 34px "DM Mono", ui-monospace, monospace'; g.fillText('ENVIRONMENT  ' + (i + 1), w/2, h*0.36);
+      g.fillStyle = 'rgba(20,24,32,0.9)'; g.font = '700 86px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText('coming soon', w/2, h*0.52);
+      g.fillStyle = 'rgba(20,24,32,0.6)'; g.font = '500 26px "DM Mono", ui-monospace, monospace'; g.fillText('to be added by Ranran', w/2, h*0.64);
+      g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 4; g.strokeRect(26, 26, w-52, h-52);
+    });
+  }
+  const screenDark = new THREE.MeshStandardMaterial({color:0x1c1c1e, roughness:0.45, metalness:0.3});
+  const screenMetal = new THREE.MeshStandardMaterial({color:0x4a4d52, roughness:0.4, metalness:0.7});
+  function screen(i, x, z, yaw){
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw;
+    g.add(mesh(new THREE.BoxGeometry(1.2, 0.03, 0.56), screenMetal, 0, 0.015, 0));
+    for(const dx of [-0.42, 0.42]) g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 10), screenMetal, dx, 0.04, 0.2, false, false));
+    g.add(mesh(new THREE.BoxGeometry(0.1, 1.95, 0.07), screenMetal, 0, 1.0, -0.03));
+    g.add(mesh(new THREE.BoxGeometry(2.24, 1.34, 0.06), screenDark, 0, 1.6, 0.02));
+    const tex = screenTex(i);
+    const mat = new THREE.MeshStandardMaterial({map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.45, roughness:0.3});
+    const display = mesh(new THREE.PlaneGeometry(2.12, 1.22), mat, 0, 1.6, 0.052, false, false);
+    g.add(display);
+    world.add(g);
+    // its footprint (the panel and the base, turned), for walking round it
+    const c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw));
+    let ex = 0, ez = 0;
+    for(const [hw, hd] of [[1.12, 0.05], [0.6, 0.28]]){ ex = Math.max(ex, c*hw + s*hd); ez = Math.max(ez, s*hw + c*hd); }
+    addBox(x - ex, x + ex, z - ez, z + ez);
+    screens.push({ group: g, display, mat });
+  }
+  screen(0, ROOM.x0 + 0.5, Z1 - 3.9, 1.3); screen(1, ROOM.x0 + 0.5, Z1 - 7.3, 1.3);
+  screen(2, ROOM.x1 - 0.5, Z1 - 3.9, -1.3); screen(3, ROOM.x1 - 0.5, Z1 - 7.3, -1.3);
+  setScreen = (i, src) => {
+    const s = screens[i]; if(!s) return;
+    const put = (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; s.mat.map = tex; s.mat.emissiveMap = tex; s.mat.needsUpdate = true; };
+    if(src && src.isTexture) put(src); else texLoader.load(src, put);
+  };
+
+  // the view: the chamber beyond the glass — snow underfoot, a few spruces, and the painted mountains all round
+  const shellH = VIEW.h + 0.4, viewLen = ROOM.z1 - VIEW.z1, viewZc = (ROOM.z1 + VIEW.z1)/2;
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x0 - OUT0, shellH, viewLen + 0.35), M.plaster, (OUT0 + ROOM.x0)/2, shellH/2, viewZc - 0.175, false, false));
+  world.add(mesh(new THREE.BoxGeometry(OUT1 - XW, shellH, viewLen + 0.35), M.plaster, (XW + OUT1)/2, shellH/2, viewZc - 0.175, false, false));
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, shellH, 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, shellH/2, VIEW.z1 - 0.175, false, false));
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, shellH - H, 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, (shellH + H)/2, ROOM.z1 - 0.175, false, false));
+  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, 0.4, viewLen - 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, VIEW.h + 0.2, (ROOM.z1 - 0.35 + VIEW.z1)/2, false, false));
+  // the annex is clad in the corridor's sandstone on the outside, so it reads as a solid block beside the glass hall
+  {
+    const clad = (len, hgt, x, y, z, yaw) => {
+      const t = stoneTex.clone(); t.needsUpdate = true; t.repeat.set(len/2.75, hgt/2.75);
+      const m = mesh(new THREE.PlaneGeometry(len, hgt), withClouds(new THREE.MeshStandardMaterial({map:t, roughness:0.92})), x, y, z, false, true); m.rotation.y = yaw; world.add(m);
+    };
+    const zTop = Z1 + 0.005, zMid = ROOM.z1, zEnd = VIEW.z1 - 0.35;
+    clad(zTop - zMid, H + 0.4, OUT0 - 0.006, (H + 0.4)/2, (zTop + zMid)/2, -Math.PI/2);
+    clad(zMid - zEnd, shellH, OUT0 - 0.006, shellH/2, (zMid + zEnd)/2, -Math.PI/2);
+    clad(zTop - zMid, H + 0.4, OUT1 + 0.006, (H + 0.4)/2, (zTop + zMid)/2, Math.PI/2);
+    clad(zMid - zEnd, shellH, OUT1 + 0.006, shellH/2, (zMid + zEnd)/2, Math.PI/2);
+    clad(OUT1 - OUT0, shellH, (OUT0 + OUT1)/2, shellH/2, zEnd - 0.006, Math.PI);
+  }
+  const snowMat = withClouds(new THREE.MeshStandardMaterial({color:0xf3f6f9, roughness:0.93}));
+  const snow = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, viewLen), snowMat, (ROOM.x0 + ROOM.x1)/2, 0.005, viewZc, false, true);
+  snow.rotation.x = -Math.PI/2; world.add(snow);
+  for(let i=0;i<9;i++){   // gentle drifts, kept inside the walls
+    const r = rr(0.9, 2.2), rz = r*rr(0.7, 1.5);
+    const m = mesh(new THREE.SphereGeometry(1, 16, 10), snowMat, rr(ROOM.x0 + r, ROOM.x1 - r), -r*0.3, rr(VIEW.z1 + rz, ROOM.z1 - rz - 0.3), false, true);
+    m.scale.set(r, r*0.38, rz); world.add(m);
+  }
+  const spruceMat = new THREE.MeshStandardMaterial({color:0x1f3a2f, roughness:0.9, flatShading:true});
+  function snowSpruce(x, z, h){
+    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rand()*6.28;
+    g.add(mesh(new THREE.CylinderGeometry(0.05*h/4, 0.08*h/4, h*0.3, 8), M.bark, 0, h*0.15, 0));
+    for(let k=0;k<4;k++){
+      const y0 = h*(0.18 + 0.19*k), rad = h*0.24*(1 - 0.21*k), hh = h*0.34;
+      g.add(mesh(new THREE.ConeGeometry(rad, hh, 9), spruceMat, 0, y0 + hh/2, 0));
+      g.add(mesh(new THREE.ConeGeometry(rad*0.97, hh*0.28, 9), snowMat, 0, y0 + hh*0.14 + 0.02, 0));
+    }
+    world.add(g);
+  }
+  snowSpruce(ROOM.x0 + 1.1, VIEW.z1 + 3.4, 5.2); snowSpruce(ROOM.x0 + 2.6, VIEW.z1 + 1.3, 4.1); snowSpruce(ROOM.x0 + 0.9, ROOM.z1 - 2.6, 3.0);
+  snowSpruce(ROOM.x1 - 1.0, VIEW.z1 + 4.6, 4.6); snowSpruce(ROOM.x1 - 2.4, VIEW.z1 + 1.6, 3.4); snowSpruce(ROOM.x1 - 0.9, ROOM.z1 - 3.1, 2.6);
+  // the panorama, painted once and wrapped round the three walls of the chamber
+  const panoTex = makeTex(4096, 1024, drawPanorama); panoTex.wrapS = panoTex.wrapT = THREE.ClampToEdgeWrapping;
+  const panoMat = new THREE.MeshBasicMaterial({map:panoTex});
+  const P = viewLen*2 + (ROOM.x1 - ROOM.x0);
+  function backdrop(len, u0, x, z, yaw){
+    const geo = new THREE.PlaneGeometry(len, VIEW.h); const uv = geo.attributes.uv;
+    for(let i=0;i<uv.count;i++) uv.setX(i, u0 + uv.getX(i)*len/P);
+    const m = mesh(geo, panoMat, x, VIEW.h/2, z, false, false); m.rotation.y = yaw; world.add(m);
+  }
+  backdrop(viewLen, 0, ROOM.x0 + 0.01, viewZc, Math.PI/2);
+  backdrop(ROOM.x1 - ROOM.x0, viewLen/P, (ROOM.x0 + ROOM.x1)/2, VIEW.z1 + 0.01, 0);
+  backdrop(viewLen, (viewLen + ROOM.x1 - ROOM.x0)/P, ROOM.x1 - 0.01, viewZc, -Math.PI/2);
+  const skyTop = new THREE.MeshBasicMaterial({color:0x6f9fd6});
+  const lid = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, viewLen), skyTop, (ROOM.x0 + ROOM.x1)/2, VIEW.h - 0.01, viewZc, false, false);
+  lid.rotation.x = Math.PI/2; world.add(lid);
+  const dayCol = new THREE.Color(1, 1, 1), nightCol = new THREE.Color(0.15, 0.18, 0.32), lidDay = new THREE.Color(0x6f9fd6), lidNight = lidDay.clone().multiply(nightCol);
+  setDaylight = (k) => { panoMat.color.copy(nightCol).lerp(dayCol, k); skyTop.color.copy(lidNight).lerp(lidDay, k); };
+}
+function drawPanorama(g, W, H){
+  const horizon = H*0.778;   // eye level, 1.6 m up a 7.2 m wall
+  const sky = g.createLinearGradient(0, 0, 0, horizon);
+  sky.addColorStop(0, '#6f9fd6'); sky.addColorStop(0.5, '#a9c9e8'); sky.addColorStop(0.86, '#dfeaf3'); sky.addColorStop(1, '#eef3f7');
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  for(let i=0;i<16;i++){   // thin high clouds
+    const cx = rand()*W, cy = horizon*rr(0.1, 0.55), cw = rr(0.08, 0.26)*W, ch = rr(0.01, 0.025)*H;
+    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, cw/2); cg.addColorStop(0, 'rgba(255,255,255,0.6)'); cg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.save(); g.translate(cx, cy); g.scale(1, ch/cw); g.translate(-cx, -cy); g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, cw/2, 0, Math.PI*2); g.fill(); g.restore();
+  }
+  const hex = (s) => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  const mix = (a, b, t) => `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`;
+  function makeRidge(np, w, jag){
+    const peaks = []; for(let i=0;i<np;i++) peaks.push({x: rand(), h: rr(0.4, 1), w: w*rr(0.6, 1.5), s: rr(0.7, 1.6)});
+    const jags = []; for(let i=0;i<4;i++) jags.push({f: rr(40, 170), p: rand()*6, a: jag*rr(0.4, 1)/(i+1)});
+    return (u) => { let y = 0; for(const p of peaks){ const d = Math.abs(u - p.x)/p.w; if(d < 1) y = Math.max(y, p.h*Math.pow(1 - d, p.s)); } for(const j of jags) y += j.a*Math.abs(Math.sin(u*j.f + j.p)); return y; };
+  }
+  const ranges = [
+    {base: horizon - 0.01*H, amp: 0.6*H, np: 9, w: 0.075, jag: 0.05, lit: '#f8fafc', shade: '#c6d5e4', rockLit: '#c0cedc', rockShade: '#98acc0', snowLine: horizon - 0.2*H, haze: 0.5},
+    {base: horizon + 0.005*H, amp: 0.42*H, np: 8, w: 0.06, jag: 0.06, lit: '#f5f8fb', shade: '#aabdd0', rockLit: '#93a6b8', rockShade: '#66798c', snowLine: horizon - 0.1*H, haze: 0.22},
+    {base: horizon + 0.025*H, amp: 0.22*H, np: 11, w: 0.045, jag: 0.07, lit: '#eff4f7', shade: '#8fa4b6', rockLit: '#6c8295', rockShade: '#45586a', snowLine: horizon - 0.02*H, haze: 0.06, trees: true},
+  ];
+  for(const R of ranges){
+    const ridge = makeRidge(R.np, R.w, R.jag), step = 3, lit = hex(R.lit), shade = hex(R.shade), rl = hex(R.rockLit), rs = hex(R.rockShade);
+    const path = new Path2D(); path.moveTo(0, H);
+    for(let x = 0; x <= W; x += step){
+      const u = x/W, h = ridge(u), y = R.base - R.amp*h, h2 = ridge((x + step)/W);
+      const slope = R.amp*(h2 - h)/step, light = Math.max(0, Math.min(1, 0.5 + slope*1.4));   // lit from the right
+      path.lineTo(x, y);
+      g.fillStyle = mix(rs, rl, light); g.fillRect(x, y, step, H - y);
+      const ragged = 0.5 + 0.5*Math.sin(u*73 + 1.3)*Math.sin(u*31 + 0.4);
+      const snowBottom = Math.min(y + R.amp*(0.12 + 0.3*ragged), R.snowLine + R.amp*0.08*ragged);
+      if(snowBottom > y){ g.fillStyle = mix(shade, lit, light); g.fillRect(x, y, step, snowBottom - y); }
+    }
+    path.lineTo(W, H); path.closePath();
+    // snow streaking down the rock, then haze over the whole range
+    g.fillStyle = 'rgba(245,249,252,0.55)';
+    for(let i=0;i<W/6;i++){ const x = rand()*W, y = R.base - R.amp*ridge(x/W); const len = rr(0.02, 0.08)*R.amp; g.fillRect(x, y + rr(0.05, 0.3)*R.amp, 2, len); }
+    g.fillStyle = `rgba(226,236,245,${R.haze})`; g.fill(path);
+    if(R.trees){
+      for(let i=0;i<1100;i++){
+        const x = rand()*W, u = x/W, yb = R.base + rr(-0.002, 0.03)*H, th = rr(14, 42)*(0.7 + 0.3*rand()), tw = th*rr(0.3, 0.45);
+        g.fillStyle = rand() < 0.5 ? '#223a32' : '#30514a'; g.beginPath(); g.moveTo(x, yb - th); g.lineTo(x + tw, yb); g.lineTo(x - tw, yb); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(240,246,250,0.85)'; g.beginPath(); g.moveTo(x, yb - th); g.lineTo(x + tw*0.3, yb - th*0.62); g.lineTo(x - tw*0.3, yb - th*0.62); g.closePath(); g.fill();
+      }
+    }
+  }
+  // the snowfield in front, with long soft shadows, down to the colour of the snow underfoot
+  const field = g.createLinearGradient(0, horizon + 0.02*H, 0, H); field.addColorStop(0, '#edf2f6'); field.addColorStop(1, '#f3f6f9');
+  g.fillStyle = field; g.fillRect(0, horizon + 0.03*H, W, H);
+  for(let i=0;i<40;i++){
+    const cx = rand()*W, cy = horizon + 0.03*H + rand()*(H - horizon - 0.03*H), rw = rr(0.03, 0.12)*W, rh = rr(0.004, 0.012)*H;
+    const sg = g.createRadialGradient(cx, cy, 0, cx, cy, rw); sg.addColorStop(0, 'rgba(176,196,216,0.3)'); sg.addColorStop(1, 'rgba(176,196,216,0)');
+    g.save(); g.translate(cx, cy); g.scale(1, rh/rw); g.translate(-cx, -cy); g.fillStyle = sg; g.beginPath(); g.arc(cx, cy, rw, 0, Math.PI*2); g.fill(); g.restore();
+  }
+  // aerial perspective: a breath of haze along the horizon
+  const air = g.createLinearGradient(0, horizon - 0.14*H, 0, horizon + 0.02*H); air.addColorStop(0, 'rgba(228,238,246,0)'); air.addColorStop(1, 'rgba(228,238,246,0.4)');
+  g.fillStyle = air; g.fillRect(0, horizon - 0.14*H, W, 0.16*H);
 }
 
 
@@ -1203,7 +1446,8 @@ redrawPosters([], true); updateBin(0);
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
   groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, guideBalloons, M, T,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit]),
+  ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setDaylight, setScreen, screens,
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit]),
   XG, XW, Z0, Z1, H, L,
 };
 }

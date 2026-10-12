@@ -17,6 +17,7 @@ ${COMMON}
 uniform vec3 uSunGlow;
 uniform float uSkyDim;
 uniform float uStars;
+uniform vec3 uMilkyNormal;   // the Milky Way runs along the great circle normal to this
 varying vec3 vDir;
 
 float fbm5(vec2 p) {
@@ -52,14 +53,60 @@ void main() {
     col = mix(col, cc, cover);
   }
 
-  // stars, only once the sky has gone dark (uStars rises with the night); a hashed grid over the dome
+  // the night sky, once the daylight has gone (uStars rises with the night) — after the starry background of
+  // ranranli.net: a faint Milky Way with dust lanes, stars in a few tints that twinkle, and the odd bright sparkle
   if (uStars > 0.001 && d.y > 0.0) {
-    vec2 suv = vec2(atan(d.z, d.x) * 52.0, asin(d.y) * 52.0);
-    vec2 cell = floor(suv), f = fract(suv);
-    float rnd = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-    vec2 cen = vec2(fract(sin(dot(cell + 1.3, vec2(269.5, 183.3))) * 43758.5453), fract(sin(dot(cell + 2.7, vec2(419.2, 371.9))) * 43758.5453));
-    float star = smoothstep(0.09, 0.0, length(f - cen)) * step(0.975, rnd) * (0.5 + 0.5 * rnd);
-    col += vec3(0.85, 0.9, 1.0) * star * 2.2 * uStars * smoothstep(0.0, 0.12, d.y) * (1.0 - cover);
+    float horiz = smoothstep(0.0, 0.12, d.y) * (1.0 - cover) * uStars;
+    vec2 ang = vec2(atan(d.z, d.x), asin(d.y));
+    // the Milky Way: a soft band along a tilted great circle, brighter clumps along it, darker lanes through it
+    float off = dot(d, uMilkyNormal);
+    float w = 0.13 + 0.07 * vnoise(ang * 2.0 + 5.0);
+    float mw = exp(-off * off / (w * w));
+    float clump = fbm5(ang * vec2(1.6, 5.0) + 3.0);
+    float lane = smoothstep(0.56, 0.74, fbm5(ang * vec2(4.0, 11.0) + 11.0));
+    mw *= (0.3 + 1.0 * clump) * (1.0 - 0.65 * lane);
+    col += vec3(0.6, 0.66, 0.92) * mw * 0.16 * horiz;
+    col += vec3(0.95, 0.8, 0.9) * mw * mw * 0.05 * horiz;
+    // the stars: hashed cells of a 3D grid that the dome passes through (so they don't bunch up at the zenith).
+    // Two layers — many faint ones (packed along the Milky Way) and brighter ones that twinkle, in the tints
+    // of a real night: mostly white, some blue, a few warm and rosy
+    vec3 ePhi = normalize(vec3(-d.z, 0.0, d.x)), eTheta = cross(d, ePhi);   // sideways and upwards on the dome
+    vec3 stars = vec3(0.0);
+    for (int layer = 0; layer < 2; layer++) {
+      float scale = layer == 0 ? 150.0 : 52.0;
+      vec3 cp = d * scale;
+      vec3 cell = floor(cp), f = fract(cp);
+      float rnd = fract(sin(dot(cell, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+      float rnd2 = fract(sin(dot(cell + 7.1, vec3(93.7, 201.3, 157.9))) * 43758.5453);
+      vec3 cen = 0.15 + 0.7 * vec3(fract(sin(dot(cell + 1.3, vec3(269.5, 183.3, 61.1))) * 43758.5453),
+                                   fract(sin(dot(cell + 2.7, vec3(419.2, 371.9, 113.5))) * 43758.5453),
+                                   fract(sin(dot(cell + 4.1, vec3(173.3, 251.7, 331.1))) * 43758.5453));
+      float keep = layer == 0 ? step(0.86 - 0.12 * mw, rnd) : step(0.88, rnd);
+      vec3 v = f - cen;
+      float dist = length(v);
+      vec3 tint = rnd2 < 0.62 ? vec3(1.0) : rnd2 < 0.84 ? vec3(0.85, 0.9, 1.0) : rnd2 < 0.93 ? vec3(1.0, 0.94, 0.86) : vec3(1.0, 0.88, 0.93);
+      if (layer == 0) {
+        stars += tint * smoothstep(0.08, 0.0, dist) * keep * (0.35 + 0.5 * rnd2);
+      } else {
+        // twinkle: a slow swell with a quicker scintillation on top, deeper for some stars than others
+        float depth = rnd2 < 0.6 ? 0.55 : 0.2;
+        float sp = 0.6 + 2.6 * fract(rnd * 17.0), ph = rnd2 * 40.0;
+        float slow = 0.5 + 0.5 * sin(uTime * sp + ph);
+        float fast = 0.78 + 0.22 * sin(uTime * sp * 2.7 + ph * 1.7);
+        float shine = 1.0 - depth + depth * slow * fast;
+        float size = 0.08 + 0.06 * pow(fract(rnd * 7.0), 4.0);
+        float star = smoothstep(size, 0.0, dist) * keep * (0.6 + 0.6 * rnd2) * shine;
+        stars += tint * star * 2.0;
+        // a few of the brightest are four-pointed sparkles with a soft halo, pulsing slowly
+        float sparkle = step(0.985, rnd) * step(0.5, rnd2);
+        float pulse = 0.55 + 0.45 * sin(uTime * (0.35 + 0.5 * rnd2) + ph);
+        vec2 q = abs(vec2(dot(v, ePhi), dot(v, eTheta)));
+        float spikes = smoothstep(0.014, 0.0, q.x) * smoothstep(0.45, 0.0, q.y) + smoothstep(0.014, 0.0, q.y) * smoothstep(0.45, 0.0, q.x);
+        float halo = smoothstep(0.3, 0.0, dist) * 0.35;
+        stars += tint * sparkle * keep * (spikes * 0.9 + halo) * (0.5 + 0.5 * pulse) * 2.0;
+      }
+    }
+    col += stars * horiz;
   }
 
   // 日轮：很亮（会被辉光晕开），不随曝光换算
@@ -75,6 +122,7 @@ export function createSky(U) {
       uSunGlow: { value: new THREE.Color(PALETTE.sunGlow) },
       uSkyDim: { value: 1 },    // clouds dim with the daylight
       uStars: { value: 0 },     // stars come out at night
+      uMilkyNormal: { value: new THREE.Vector3(0.55, 0.62, -0.56).normalize() },   // a band arching high across the sky
     },
     vertexShader: vert,
     fragmentShader: frag,

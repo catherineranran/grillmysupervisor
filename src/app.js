@@ -12,6 +12,8 @@ import { createSky } from './sky.js';
 import { createGrass } from './grass.js';
 import { createFlowers } from './flowers.js';
 import { Butterflies } from './butterflies.js';
+import { Fireflies } from './fireflies.js';
+import { Meteors } from './nightSky.js';
 import { Soundscape } from './audio.js';
 import { World } from './world.js';
 import { Flock } from './flock.js';
@@ -106,6 +108,7 @@ function followShadow(center) {
 
 // ---------- the valley ----------
 const sky = createSky(U); scene.add(sky);
+const meteors = new Meteors(sky);   // shooting stars ride on the dome
 const horizon = createHorizon(U); scene.add(horizon);
 const lake = createLake(U); scene.add(lake);
 const world = new World(scene, U);
@@ -115,11 +118,12 @@ scene.add(grassNear, grassMid);
 const flowers = createFlowers(U, { count: isTouch ? 3000 : 6500, size: 32 });
 scene.add(flowers);
 const butterflies = new Butterflies(scene, U, tuning, isTouch ? 3 : 5);   // in place of the original's bumblebees: a few, and silent
+const fireflies = new Fireflies(scene, isTouch ? 110 : 240);                // 萤火虫, over the meadow in the evenings
 const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
 const G = buildGallery({ scene, maxAniso: renderer.capabilities.getMaxAnisotropy(), isTouch });
-const { posters, colliders, DOORS, STAIR, BIN, TREES, XG, XW, Z0, Z1 } = G;
+const { posters, colliders, DOORS, STAIR, BIN, TREES, XG, XW, Z0, Z1, ROOM, FARDOOR } = G;
 { // the retaining wall around the platform keeps you on it (except down the steps), and off it from below
   const R = SITE.rect, t = 0.3;
   colliders.push({ minX: R.x1, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z1 + t });
@@ -127,8 +131,7 @@ const { posters, colliders, DOORS, STAIR, BIN, TREES, XG, XW, Z0, Z1 } = G;
   colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: STAIR.z0, maxZ: R.z1 + t });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z0 });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z1, maxZ: R.z1 + t });
-  colliders.push({ minX: XG - 0.3, maxX: XW + 0.3, minZ: Z0, maxZ: Z0 + 0.25 });   // the corridor's end walls
-  colliders.push({ minX: XG - 0.3, maxX: XW + 0.3, minZ: Z1 - 0.25, maxZ: Z1 });
+  colliders.push({ minX: XG - 0.3, maxX: XW + 0.3, minZ: Z0, maxZ: Z0 + 0.25 });   // the corridor's near end wall (the far one has the door to the room; gallery.js)
 }
 
 // ---------- the flock ----------
@@ -282,6 +285,7 @@ function setHover(obj) {
       : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
       : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · send a greeting or an appreciation — it goes up on the wall'
       : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
+      : hover.userData.kind === 'lock' ? '<b>' + key + '</b> · a locked door — Ranran\'s room. Do you know the password?'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -293,6 +297,7 @@ const notesEl = $('notes'), readonlyEl = $('readonly');
 const sayForm = $('say'), sayText = $('sayText'), saySig = $('saySig'), sayBtn = $('sayBtn');
 const statusEl = $('status'), swapBtn = $('swap');
 const gatePanel = $('gate'), listPanel = $('plist'), creditsPanel = $('credits');
+const lockPanel = $('lockp'), lockForm = $('lockForm'), lockText = $('lockText'), lockStatus = $('lockStatus');
 let mode = 'poster', current = null;
 let db = null, user = null, myId = null, isOwner = false, canWrite = null, dataMode = 'loading';
 let wallNotes = [], binNotes = [], grillNotes = [], signNotes = [];
@@ -417,6 +422,7 @@ function openPanel(el) {
 function openBoard(obj) {
   if (boardOpen) return;
   if (obj.userData.kind === 'gate') { openPanel(gatePanel); return; }
+  if (obj.userData.kind === 'lock') { openPanel(lockPanel); lockStatus.textContent = ''; lockText.value = ''; if (!isTouch) setTimeout(() => lockText.focus(), 50); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
   if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); renderHands(); padRedraw(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
@@ -436,7 +442,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; askingFor = null; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -456,6 +462,21 @@ function renderList() {
 $('plistBin').addEventListener('click', () => { listPanel.hidden = true; mode = 'bin'; current = null; board.hidden = false; setStatus(''); renderBoard(); });
 $('mPosters').addEventListener('click', () => { if (boardOpen) closeBoard(); openList(); });
 $('mCredits').addEventListener('click', () => { if (boardOpen) closeBoard(); openCredits(); });
+// the door to Ranran's room: the password is checked here in the page (it is a game, not a vault)
+const ROOM_PASSWORD = 'geniusRanran';
+lockForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (lockText.value.trim() === ROOM_PASSWORD) {
+    lockStatus.textContent = 'Click — the door swings open. Come in.';
+    G.openFarDoor();
+    const i = G.interactables.indexOf(G.lockHit); if (i >= 0) G.interactables.splice(i, 1);
+    setTimeout(() => { if (!lockPanel.hidden) closeBoard(); }, 900);
+  } else {
+    lockStatus.textContent = lockText.value.trim() ? 'That is not it.' : 'Say the password first.';
+    lockPanel.querySelector('.card').classList.remove('shake'); void lockPanel.offsetWidth; lockPanel.querySelector('.card').classList.add('shake');
+    lockText.select();
+  }
+});
 $('mSound').addEventListener('click', () => {
   sound.start();
   const on = tuning.sound.master > 0;
@@ -783,7 +804,7 @@ function blendLook(a, b, k) {   // a is the full tuning; b overrides a few colou
   }
   return out;
 }
-let cur = tuning, clockMins = 930, lampK = 0, dayK = 1;
+let cur = tuning, clockMins = 930, lampK = 0, dayK = 1, starK = 0, fireflyK = 0;
 function setClock(mins) {
   clockMins = mins;
   const h = mins / 60;
@@ -810,7 +831,10 @@ function setClock(mins) {
   hemi.groundColor.set(0xcdbfa9).multiplyScalar(0.35 + 0.65 * dayK);
   scene.fog.color.copy(U.uFogColor.value);
   sky.material.uniforms.uSkyDim.value = 0.12 + 0.88 * dayK;
-  sky.material.uniforms.uStars.value = THREE.MathUtils.clamp((-sunEl - 3) / 9, 0, 1);
+  starK = THREE.MathUtils.clamp((-sunEl - 3) / 9, 0, 1);
+  sky.material.uniforms.uStars.value = starK;
+  fireflyK = THREE.MathUtils.smoothstep(-sunEl, -1, 7);   // the fireflies come out as the sun goes down
+  G.setDaylight(dayK);
   sky.material.uniforms.uSunGlow.value.set(useMoon ? '#c8d4ff' : PALETTE.sunGlow);
   // the standing lamps burn from 18:00 to 06:00
   lampK = h >= 12 ? THREE.MathUtils.clamp(h - 17.5, 0, 1) : THREE.MathUtils.clamp(6.5 - h, 0, 1);
@@ -827,9 +851,11 @@ function collide() {
   for (const d of DOORS) if (d.angle < -1.1 && player.z > d.z1 + R && player.z < d.z0 - R) { through = d; break; }
   if (through) {
     if (Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, through.z1 + R, through.z0 - R);
+  } else if (player.z < ROOM.z0 && onPlatform(player.x, player.z)) {   // in Ranran's room: its walls and the glass
+    player.x = THREE.MathUtils.clamp(player.x, ROOM.x0 + R, ROOM.x1 - R); player.z = Math.max(player.z, ROOM.z1 + R);
   } else if (player.x >= XG && onPlatform(player.x, player.z)) player.x = Math.max(player.x, XG + 0.24 + R);
   else if (onPlatform(player.x, player.z)) player.x = Math.min(player.x, XG - 0.24 - R);
-  if (player.x > XG && player.x < XW) player.z = THREE.MathUtils.clamp(player.z, Z1 + R, Z0 - R);
+  if (player.x > XG && player.x < XW && player.z > Z1) player.z = Math.min(player.z, Z0 - R);   // (the far end is the door to the room)
   player.x = THREE.MathUtils.clamp(player.x, -300, 40);
   player.z = THREE.MathUtils.clamp(player.z, -400, 400);
   for (const b of colliders) {
@@ -992,6 +1018,8 @@ function frame() {
   }
   G.tickSmoke(dt);
   G.tickBalloons(dt, time);
+  G.tickFarDoor(dt);
+  meteors.update(dt, starK);
 
   // the valley's sounds belong to the valley: silent in the gallery and on the terrace, fading in on the way down the steps
   const outdoors = onPlatform(player.x, player.z) ? 0
@@ -1020,6 +1048,8 @@ function frame() {
   if (onMeadow) { herdCtx.fx += (f.x - herdCtx.fx) * kk; herdCtx.fz += (f.z - herdCtx.fz) * kk; const l = Math.hypot(herdCtx.fx, herdCtx.fz) || 1; herdCtx.fx /= l; herdCtx.fz /= l; }
   if (flock) flock.update(dt, time, herdCtx);
   butterflies.update(dt, time, camera.position, f.x, f.z);
+  fireflies.material.uniforms.uPixelRatio.value = dpr;
+  fireflies.update(dt, time, camera.position, f.x, f.z, fireflyK);
   sound.update(dt, { camera, walker: { speed: v }, flock: flock || { bleats: [] }, bees: butterflies });
 
   followShadow(tmp.copy(f).multiplyScalar(9).add(camera.position));
@@ -1038,5 +1068,5 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies });
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));
