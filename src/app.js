@@ -116,7 +116,7 @@ const world = new World(scene, U);
 const grassNear = createGrass(U, { count: isTouch ? 200000 : 520000, size: 28, fadeOut: [7, 13], width: 0.017, height: 0.2, segs: 2, seed: 11 });
 const grassMid = createGrass(U, { count: isTouch ? 110000 : 300000, size: 90, fadeIn: [7, 13], fadeOut: [28, 44], width: 0.036, height: 0.2, segs: 1, seed: 23 });
 scene.add(grassNear, grassMid);
-const flowers = createFlowers(U, { count: isTouch ? 3000 : 6500, size: 32 });
+const flowers = createFlowers(U, { count: isTouch ? 3600 : 9500, size: 32 });
 scene.add(flowers);
 const butterflies = new Butterflies(scene, U, tuning, isTouch ? 3 : 5);   // in place of the original's bumblebees: a few, and silent
 const fireflies = new Fireflies(scene, isTouch ? 110 : 240);                // 萤火虫, over the meadow in the evenings
@@ -1063,7 +1063,7 @@ function frame() {
     d.pivot.rotation.y = d.angle;
   }
   G.tickSmoke(dt);
-  G.tickBalloons(dt, time);
+  { const [clx, clz] = toLocal(camera.position.x, camera.position.z); G.tickBalloons(dt, time, { x: clx, z: clz }); }
   G.tickFarDoor(dt);
   meteors.update(dt, starK);
   G.tickFire(dt, time, 1 - dayK);

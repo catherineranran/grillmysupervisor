@@ -326,49 +326,98 @@ for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1]]){   // the terrace ends
 
 // ---------- the trees along the terrace (the gallery's own, from its first version) ----------
 // airy yellow-green crowns standing on the meadow just beyond the retaining wall; their feet follow the valley floor
-M.bark = new THREE.MeshStandardMaterial({color:0x6f665c, roughness:0.95});
+// bark: a streaked, slightly ridged texture rather than a flat colour
+const barkTex = makeTex(256, 512, (g, w, h) => {
+  g.fillStyle = '#6f665c'; g.fillRect(0, 0, w, h);
+  for(let i=0;i<260;i++){
+    const x = rand()*w, y0 = rand()*h, len = rr(30, 160), wd = rr(1, 4);
+    g.strokeStyle = `hsla(${rr(24, 36)},${rr(10, 22)}%,${rr(24, 52)}%,${rr(0.25, 0.7)})`; g.lineWidth = wd;
+    g.beginPath(); g.moveTo(x, y0); g.lineTo(x + rr(-6, 6), y0 + len); g.stroke();
+  }
+  for(let i=0;i<60;i++){ g.fillStyle = `rgba(230,220,200,${rr(0.05, 0.18)})`; g.fillRect(rand()*w, rand()*h, rr(1, 3), rr(6, 30)); }
+});
+barkTex.repeat.set(2, 3);
+M.bark = new THREE.MeshStandardMaterial({map:barkTex, roughness:0.95});
 const TREES = [
   {x:-12.4,z:1.8,h:11,r:4.2}, {x:-13.5,z:-15,h:9.5,r:3.6}, {x:-11,z:-27,h:10.5,r:4},
   {x:-14,z:-39,h:12,r:4.4}, {x:-11.8,z:-52,h:9,r:3.5}, {x:-13,z:-64,h:11,r:4}, {x:-12,z:9,h:10,r:3.8},
   {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-12.5,z:-76,h:10,r:3.8},
 ];
 {
-  const clumpGeo = new THREE.IcosahedronGeometry(0.26, 0);
-  const per = 1300, n = TREES.length*per;
-  const leaves = new THREE.InstancedMesh(clumpGeo, new THREE.MeshStandardMaterial({flatShading:true, roughness:0.9}), n);
+  // the crowns: rounded clumps of leaves for the mass, and cards of drawn leaf clusters over them for the lace
+  // at the edges; both take the tree's yellow-greens per instance, lighter on top, deeper down in the crown
+  const leafCardTex = makeTex(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    for(let i=0;i<11;i++){
+      const cx = 128 + rr(-70, 70), cy = 128 + rr(-70, 70), L = rr(44, 70), W = L*rr(0.42, 0.6), a = rand()*Math.PI*2;
+      g.save(); g.translate(cx, cy); g.rotate(a);
+      const grd = g.createLinearGradient(-L/2, 0, L/2, 0); grd.addColorStop(0, `hsl(${rr(62, 74)},${rr(45, 60)}%,${rr(62, 74)}%)`); grd.addColorStop(1, `hsl(${rr(64, 78)},${rr(40, 55)}%,${rr(48, 60)}%)`);
+      g.fillStyle = grd; g.beginPath(); g.moveTo(-L/2, 0); g.quadraticCurveTo(0, -W, L/2, 0); g.quadraticCurveTo(0, W, -L/2, 0); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(70,80,30,0.35)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(-L/2, 0); g.lineTo(L/2, 0); g.stroke();
+      for(let k=-2;k<=2;k++){ if(!k) continue; g.beginPath(); g.moveTo(k*L*0.17, 0); g.lineTo(k*L*0.17 + L*0.12, -Math.sign(k)*0.0 - W*0.55*(k > 0 ? 1 : -1)); g.stroke(); }
+      g.restore();
+    }
+  });
+  leafCardTex.wrapS = leafCardTex.wrapT = THREE.ClampToEdgeWrapping;
+  const cardMat = new THREE.MeshStandardMaterial({map:leafCardTex, alphaTest:0.5, side:THREE.DoubleSide, roughness:0.75});
+  const cardDepth = new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking, map:leafCardTex, alphaTest:0.5});
+  const clumpGeo = new THREE.IcosahedronGeometry(0.3, 1);
+  const cardGeo = new THREE.PlaneGeometry(0.9, 0.9);
+  const perClump = 1000, perCard = 950;
+  const clumps = new THREE.InstancedMesh(clumpGeo, new THREE.MeshStandardMaterial({roughness:0.85}), TREES.length*perClump);
+  const cards = new THREE.InstancedMesh(cardGeo, cardMat, TREES.length*perCard);
+  cards.customDepthMaterial = cardDepth;
   const d = new THREE.Object3D(), col = new THREE.Color();
   const palette = [0xb7ad5a, 0xcabb6c, 0x9c9b4c, 0xd6c57a, 0x87903f, 0xbfae62];
-  let idx = 0;
+  let ic = 0, ik = 0;
+  const trunkTop = new THREE.Vector3(), tmpV = new THREE.Vector3();
   for(const t of TREES){
     const [wx, wz] = toWorld(t.x, t.z);
     const ground = t.ground = heightAt(wx, wz) - SITE.H0 - 0.12;   // the foot sinks a little into the turf
-    const trunkH = t.h*0.55;
-    world.add(mesh(new THREE.CylinderGeometry(0.13, 0.26, trunkH, 8), M.bark, t.x, ground+trunkH/2, t.z));
+    const trunkH = t.h*0.55, lean = rr(-0.06, 0.06), leanDir = rand()*Math.PI*2;
+    // the trunk in three tapering lengths, leaning a touch, with a flare at the root
+    let y = ground, px = t.x, pz = t.z;
+    for(let seg=0; seg<3; seg++){
+      const len = trunkH/3, r0 = 0.3 - seg*0.07, r1 = 0.23 - seg*0.07;
+      const m = mesh(new THREE.CylinderGeometry(r1, r0, len, 10), M.bark, 0, 0, 0);
+      m.geometry.translate(0, len/2, 0);
+      m.position.set(px, y, pz); m.rotation.set(Math.sin(leanDir)*lean*(seg+1), 0, Math.cos(leanDir)*lean*(seg+1));
+      world.add(m);
+      px += Math.sin(leanDir)*lean*len*(seg+1); pz += Math.cos(leanDir)*lean*len*(seg+1); y += len*0.985;
+    }
+    world.add(mesh(new THREE.CylinderGeometry(0.3, 0.42, 0.25, 10), M.bark, t.x, ground + 0.12, t.z));
+    trunkTop.set(px, y, pz);
     const cy = ground + t.h*0.62;
-    for(let b=0;b<7;b++){
-      const len = rr(2,3.6), a = rand()*Math.PI*2, tilt = rr(0.4,0.9);
-      const br = mesh(new THREE.CylinderGeometry(0.04, 0.1, len, 6), M.bark, 0,0,0);
+    // branches: nine from the top of the trunk, each with a couple of twigs
+    for(let b=0;b<9;b++){
+      const len = rr(2.2, 3.8), a = b/9*Math.PI*2 + rr(-0.3, 0.3), tilt = rr(0.45, 0.95);
+      const br = mesh(new THREE.CylinderGeometry(0.035, 0.11, len, 7), M.bark, 0, 0, 0);
       br.geometry.translate(0, len/2, 0);
-      br.position.set(t.x, ground+trunkH*rr(0.7,1), t.z);
+      br.position.set(px, y - trunkH*rr(0.02, 0.3), pz);
       br.rotation.set(Math.sin(a)*tilt, 0, Math.cos(a)*tilt);
       world.add(br);
+      for(let k=0;k<2;k++){
+        const tl = rr(1.0, 1.8), tw = mesh(new THREE.CylinderGeometry(0.02, 0.045, tl, 5), M.bark, 0, 0, 0);
+        tw.geometry.translate(0, tl/2, 0);
+        tmpV.set(0, len*rr(0.55, 0.95), 0).applyEuler(br.rotation).add(br.position);
+        tw.position.copy(tmpV); tw.rotation.set(Math.sin(a + rr(-0.9, 0.9))*rr(0.6, 1.2), 0, Math.cos(a + rr(-0.9, 0.9))*rr(0.6, 1.2));
+        world.add(tw);
+      }
     }
-    for(let i=0;i<per;i++){
-      // airy crown: points in an ellipsoid, biased to the shell
-      let x,y,z; do{ x=rr(-1,1); y=rr(-1,1); z=rr(-1,1);} while(x*x+y*y+z*z>1);
-      const k = 0.55 + 0.45*Math.pow(rand(),0.4);
-      const len = Math.hypot(x,y,z)||1;
-      x = x/len*k; y = y/len*k; z = z/len*k;
-      d.position.set(t.x + x*t.r, cy + y*t.h*0.36, t.z + z*t.r);
-      const s = rr(0.5, 1.15); d.scale.set(s, s*rr(0.7,1.1), s);
+    const place = (i, radiusK, sizeA, sizeB, isCard) => {
+      let x, yy, z; do{ x = rr(-1, 1); yy = rr(-1, 1); z = rr(-1, 1); } while(x*x + yy*yy + z*z > 1);
+      const k = radiusK + (1 - radiusK)*Math.pow(rand(), 0.4);
+      const l = Math.hypot(x, yy, z) || 1; x = x/l*k; yy = yy/l*k; z = z/l*k;
+      d.position.set(t.x + x*t.r, cy + yy*t.h*0.36, t.z + z*t.r);
+      const s = rr(sizeA, sizeB); d.scale.set(s, s*rr(0.75, 1.1), s);
       d.rotation.set(rand()*3, rand()*3, rand()*3); d.updateMatrix();
-      leaves.setMatrixAt(idx, d.matrix);
-      col.set(palette[(rand()*palette.length)|0]); col.offsetHSL(rr(-0.02,0.02), 0, rr(-0.06,0.05));
-      leaves.setColorAt(idx, col);
-      idx++;
-    }
+      col.set(palette[(rand()*palette.length)|0]); col.offsetHSL(rr(-0.02, 0.02), 0, rr(-0.05, 0.06) + yy*0.05);   // lighter up top
+      if(isCard){ cards.setMatrixAt(i, d.matrix); cards.setColorAt(i, col); } else { clumps.setMatrixAt(i, d.matrix); clumps.setColorAt(i, col); }
+    };
+    for(let i=0;i<perClump;i++) place(ic++, 0.4, 0.3, 0.62, false);
+    for(let i=0;i<perCard;i++) place(ik++, 0.55, 1.1, 2.0, true);
   }
-  leaves.castShadow = true; leaves.receiveShadow = true; leaves.frustumCulled = false; world.add(leaves);
+  for(const m of [clumps, cards]){ m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; world.add(m); }
 }
 
 
@@ -378,31 +427,37 @@ function addBox(minX,maxX,minZ,maxZ){ colliders.push({minX,maxX,minZ,maxZ}); }
 
 const sofaZs = [];
 // leather: cognac, with a clear coat for the sheen; the backs and arms carry a baked diamond-tufting texture
-const tuftTex = makeTex(512, 256, (g, w, h) => {
+const tuftTex = makeTex(1024, 512, (g, w, h) => {
   g.fillStyle = '#7a4424'; g.fillRect(0, 0, w, h);
-  const cx = 64, cy = 64;   // diamond cell
+  const cx = 128, cy = 128;   // diamond cell
   for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
-    const grd = g.createRadialGradient(x, y - 6, 4, x, y, cx*0.8);
-    grd.addColorStop(0, '#a4653a'); grd.addColorStop(0.55, '#8a4f2a'); grd.addColorStop(1, '#5c3118');
+    const grd = g.createRadialGradient(x - 10, y - 16, 6, x, y, cx*0.8);
+    grd.addColorStop(0, '#b0703f'); grd.addColorStop(0.5, '#8c502b'); grd.addColorStop(1, '#55290f');
     g.fillStyle = grd; g.beginPath(); g.moveTo(x, y - cy/2); g.lineTo(x + cx/2, y); g.lineTo(x, y + cy/2); g.lineTo(x - cx/2, y); g.closePath(); g.fill();
   }
   // the seams and the buttons at the pleats
-  g.strokeStyle = 'rgba(40,18,8,0.55)'; g.lineWidth = 2;
+  g.strokeStyle = 'rgba(40,18,8,0.6)'; g.lineWidth = 4;
   for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
     g.beginPath(); g.moveTo(x, y - cy/2); g.lineTo(x + cx/2, y); g.lineTo(x, y + cy/2); g.lineTo(x - cx/2, y); g.closePath(); g.stroke();
   }
   for(let y = -cy; y <= h + cy; y += cy) for(let x = ((y/cy) % 2 ? cx/2 : 0) - cx; x <= w + cx; x += cx){
     for(const [px, py] of [[x, y - cy/2], [x + cx/2, y]]){
-      const b = g.createRadialGradient(px - 2, py - 2, 1, px, py, 7); b.addColorStop(0, '#7a4a2a'); b.addColorStop(1, '#2d1409');
-      g.fillStyle = b; g.beginPath(); g.arc(px, py, 6, 0, Math.PI*2); g.fill();
+      const b = g.createRadialGradient(px - 4, py - 4, 2, px, py, 13); b.addColorStop(0, '#8c5a36'); b.addColorStop(0.6, '#4a2410'); b.addColorStop(1, '#2d1409');
+      g.fillStyle = b; g.beginPath(); g.arc(px, py, 11, 0, Math.PI*2); g.fill();
+      g.strokeStyle = 'rgba(255,220,180,0.25)'; g.lineWidth = 1.5; g.beginPath(); g.arc(px, py, 9, 0, Math.PI*2); g.stroke();
     }
   }
 });
 tuftTex.repeat.set(1, 1);
-const leather = new THREE.MeshPhysicalMaterial({color:0x7a4424, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3});
-const leatherTuft = new THREE.MeshPhysicalMaterial({map:tuftTex, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3});
-const leatherDark = new THREE.MeshPhysicalMaterial({color:0x5a2f16, roughness:0.5, clearcoat:0.4});
-const velvet = [new THREE.MeshStandardMaterial({color:0x2f5d4a, roughness:0.95}), new THREE.MeshStandardMaterial({color:0xc99a3a, roughness:0.95}), new THREE.MeshStandardMaterial({color:0x5b3f6e, roughness:0.95})];
+// a fine grain for the plain leather, and the tufting's own relief as a bump map
+const grainTex = makeTex(256, 256, (g, w, h) => { g.fillStyle = '#808080'; g.fillRect(0, 0, w, h); for(let i=0;i<9000;i++){ g.fillStyle = `rgba(${rand()<0.5?60:200},${rand()<0.5?60:200},${rand()<0.5?60:200},0.12)`; g.fillRect(rand()*w, rand()*h, 1.5, 1.5); } }, false);
+grainTex.repeat.set(3, 3);
+const leather = new THREE.MeshPhysicalMaterial({color:0x7a4424, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3, bumpMap:grainTex, bumpScale:0.0012});
+const leatherTuft = new THREE.MeshPhysicalMaterial({map:tuftTex, roughness:0.42, metalness:0, clearcoat:0.55, clearcoatRoughness:0.3, bumpMap:tuftTex, bumpScale:0.012});
+const leatherDark = new THREE.MeshPhysicalMaterial({color:0x5a2f16, roughness:0.5, clearcoat:0.4, bumpMap:grainTex, bumpScale:0.0012});
+const velvetTex = makeTex(128, 128, (g, w, h) => { g.fillStyle = '#808080'; g.fillRect(0, 0, w, h); for(let i=0;i<4000;i++){ g.fillStyle = `rgba(${rand()<0.5?90:170},${rand()<0.5?90:170},${rand()<0.5?90:170},0.2)`; g.fillRect(rand()*w, rand()*h, 1, 2); } }, false);
+velvetTex.repeat.set(4, 4);
+const velvet = [0x2f5d4a, 0xc99a3a, 0x5b3f6e].map((c) => new THREE.MeshPhysicalMaterial({color:c, roughness:0.9, sheen:0.8, sheenRoughness:0.6, sheenColor:new THREE.Color(c).offsetHSL(0, 0, 0.25), bumpMap:velvetTex, bumpScale:0.002}));
 const walnut = new THREE.MeshStandardMaterial({color:0x3a2516, roughness:0.55, metalness:0.05});
 const brass = new THREE.MeshStandardMaterial({color:0xd4b05a, roughness:0.3, metalness:0.85});
 const nailGeo = new THREE.SphereGeometry(0.009, 8, 6), nailMats = [];
@@ -413,27 +468,38 @@ function sofa(zc){
   const k = sofaZs.length;
   // plinth and the two seat cushions
   g.add(mesh(new THREE.BoxGeometry(dep-0.1, 0.2, len-0.08), leatherDark, 0, 0.24, 0));
-  for(const sz of [-1, 1]) g.add(mesh(new RoundedBoxGeometry(dep-0.26, 0.17, len/2-0.14, 3, 0.05), leather, -0.04, 0.42, sz*(len/4-0.04)));
-  // the tufted back, rolled over at the top
+  // two plump seat cushions, with piping round the top edge and a slight sag in the middle
+  for(const sz of [-1, 1]){
+    const cu = mesh(new RoundedBoxGeometry(dep-0.26, 0.18, len/2-0.14, 6, 0.07), leather, -0.04, 0.42, sz*(len/4-0.04)); cu.scale.set(1, 0.95, 1); g.add(cu);
+    const pipe = new THREE.Mesh(new THREE.TorusGeometry(1, 0.008, 6, 48), leatherDark); pipe.scale.set((dep-0.26)/2 - 0.02, (len/2-0.14)/2 - 0.02, 1); pipe.rotation.x = Math.PI/2; pipe.position.set(-0.04, 0.505, sz*(len/4-0.04)); g.add(pipe);
+  }
+  // the tufted back, with real relief in the pleats, rolled over at the top
   const backMats = [leather, leatherTuft, leather, leather, leather, leather];   // the face towards the seat is tufted
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, len-0.3), backMats); back.position.set(0.25, 0.66, 0); back.rotation.z = -0.14; back.castShadow = true; back.receiveShadow = true; g.add(back);
-  const backRoll = mesh(new THREE.CylinderGeometry(0.11, 0.11, len-0.3, 20), leather, 0.2, 0.92, 0); backRoll.rotation.x = Math.PI/2; g.add(backRoll);
+  const back = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.5, len-0.3, 3, 0.03), backMats); back.position.set(0.25, 0.66, 0); back.rotation.z = -0.14; back.castShadow = true; back.receiveShadow = true; g.add(back);
+  const backRoll = mesh(new THREE.CylinderGeometry(0.11, 0.11, len-0.3, 32), leather, 0.2, 0.92, 0); backRoll.rotation.x = Math.PI/2; g.add(backRoll);
+  for(const sz of [-1, 1]) g.add(mesh(new THREE.SphereGeometry(0.11, 24, 16), leather, 0.2, 0.92, sz*(len/2-0.15)));
   // rolled, tufted arms with brass nailheads along the outer edge
   for(const sz of [-1, 1]){
     const armMats = [leather, leather, leather, leather, sz > 0 ? leatherTuft : leather, sz > 0 ? leather : leatherTuft];
     const armBody = new THREE.Mesh(new THREE.BoxGeometry(dep-0.1, 0.3, 0.22), armMats); armBody.position.set(-0.02, 0.5, sz*(len/2-0.12)); armBody.castShadow = true; armBody.receiveShadow = true; g.add(armBody);
-    const arm = mesh(new THREE.CylinderGeometry(0.13, 0.13, dep+0.02, 20), leather, -0.02, 0.66, sz*(len/2-0.12)); arm.rotation.z = Math.PI/2; g.add(arm);
-    for(let i=0;i<11;i++){ const n = mesh(nailGeo, brass, -0.34 + i*0.064, 0.37, sz*(len/2-0.005), false, false); g.add(n); }
+    const arm = mesh(new THREE.CylinderGeometry(0.13, 0.13, dep+0.02, 32), leather, -0.02, 0.66, sz*(len/2-0.12)); arm.rotation.z = Math.PI/2; g.add(arm);
+    g.add(mesh(new THREE.SphereGeometry(0.13, 24, 16), leather, -0.02 - (dep+0.02)/2, 0.66, sz*(len/2-0.12)));
+    for(let i=0;i<14;i++){ const n = mesh(nailGeo, brass, -0.37 + i*0.052, 0.37, sz*(len/2-0.005), false, false); g.add(n); }
+    for(let i=0;i<8;i++){ const a = Math.PI*(0.15 + i/7*0.7); g.add(mesh(nailGeo, brass, -0.02 - (dep+0.02)/2 - Math.cos(a)*0.13, 0.66 + Math.sin(a)*0.13, sz*(len/2-0.005), false, false)); }
   }
-  // turned walnut feet
+  // turned walnut feet: a bun, a neck and a collar
   for(const sx of [-0.28, 0.26]) for(const sz of [-1, 1]){
-    g.add(mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.14, 10), walnut, sx, 0.07, sz*(len/2-0.14)));
-    g.add(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 10), walnut, sx, 0.145, sz*(len/2-0.14), false, false));
+    const fz = sz*(len/2-0.14);
+    g.add(mesh(new THREE.SphereGeometry(0.045, 14, 10), walnut, sx, 0.045, fz));
+    g.add(mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.06, 12), walnut, sx, 0.1, fz));
+    g.add(mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.025, 14), walnut, sx, 0.142, fz, false, false));
   }
-  // a velvet cushion in each corner
+  // a velvet cushion in each corner, piped
   for(const sz of [-1, 1]){
-    const cu = mesh(new RoundedBoxGeometry(0.1, 0.4, 0.4, 3, 0.04), velvet[(k + (sz > 0 ? 1 : 0)) % velvet.length], 0.1, 0.72, sz*(len/2-0.36));
+    const vm = velvet[(k + (sz > 0 ? 1 : 0)) % velvet.length];
+    const cu = mesh(new RoundedBoxGeometry(0.1, 0.4, 0.4, 4, 0.045), vm, 0.1, 0.72, sz*(len/2-0.36));
     cu.rotation.z = -0.22; cu.rotation.y = sz*0.18; g.add(cu);
+    const pipe = new THREE.Mesh(new THREE.TorusGeometry(1, 0.007, 6, 40), new THREE.MeshStandardMaterial({color:vm.color.clone().offsetHSL(0, 0, 0.18), roughness:0.9})); pipe.scale.set(0.18, 0.18, 1); pipe.rotation.y = Math.PI/2; cu.add(pipe); pipe.position.x = 0.0;
   }
   world.add(g);
   addBox(1.08, 2, zc-len/2, zc+len/2);
@@ -520,16 +586,22 @@ function doorway(zc){
 
 // ---------- bookshelves ----------
 const bookMats = [], bookCols = [];
-const shelfMat = new THREE.MeshStandardMaterial({color:0xb8996f, roughness:0.75});
+const shelfWood = woodTex.clone(); shelfWood.needsUpdate = true; shelfWood.repeat.set(0.6, 0.35); shelfWood.rotation = Math.PI/2;
+const shelfMat = new THREE.MeshStandardMaterial({map:shelfWood, color:0xcdb08a, roughness:0.7});
+const shelfBack = new THREE.MeshStandardMaterial({color:0xa88c66, roughness:0.85});
 const bookPalette = [0x8c3b2e,0x2f4a5e,0x6d7a4a,0xc9b48a,0x3d3a36,0xa8673a,0xe8e1d3,0x5a4a6b,0x9e8d6c,0x34584f,0xb7472f,0xd9c7a0];
 function bookshelf(zc){
   const W = 0.92, D = 0.36, HT = 2.15, T = 0.03, x = XW - D/2 - 0.01;
   const g = new THREE.Group(); g.position.set(x, 0, zc);
   for(const s of [-1,1]) g.add(mesh(new THREE.BoxGeometry(D, HT, T), shelfMat, 0, HT/2, s*(W/2 - T/2)));
-  g.add(mesh(new THREE.BoxGeometry(0.02, HT, W), shelfMat, D/2-0.01, HT/2, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.02, HT, W), shelfBack, D/2-0.01, HT/2, 0));
   g.add(mesh(new THREE.BoxGeometry(D, 0.08, W), shelfMat, 0, 0.04, 0));
   const levels = [0.08, 0.5, 0.9, 1.3, 1.7, HT - T];
-  for(const y of levels.slice(1)) g.add(mesh(new THREE.BoxGeometry(D, T, W - 2*T), shelfMat, 0, y + T/2 - (y===HT-T?0:0), 0));
+  for(const y of levels.slice(1)){
+    g.add(mesh(new THREE.BoxGeometry(D, T, W - 2*T), shelfMat, 0, y + T/2, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.012, T + 0.016, W - 2*T), shelfMat, -D/2 + 0.006, y + T/2, 0, false, true));   // a lip along the front edge
+  }
+  g.add(mesh(new THREE.BoxGeometry(D + 0.02, 0.05, W + 0.02), shelfMat, 0, HT + 0.025, 0));   // the cornice
   world.add(g);
   addBox(x - D/2, XW, zc - W/2, zc + W/2);
   // books on each level
@@ -573,10 +645,31 @@ for(const z of [20, -16, -38, -60]){ sofa(z); bookshelf(z + 1.45); }
 plant(-66.5); lamp(-65.6);
 plant(36.4); lamp(35.6);
 {
-  const books = new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({roughness:0.8}), bookMats.length);
+  // spines in four designs (bands, a title block, ridges), drawn pale so each book's own colour tints them
+  const spineTex = (design) => makeTex(128, 512, (g, w, h) => {
+    g.fillStyle = '#e8e8e8'; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h);
+    if(design === 0){ for(const y of [40, 60, h - 70, h - 50]){ g.fillStyle = '#5a4a3a'; g.fillRect(14, y, w - 28, 5); } g.fillStyle = '#4a4a4a'; for(let i=0;i<3;i++) g.fillRect(24, 150 + i*26, w - 48 - i*18, 10); }
+    else if(design === 1){ g.fillStyle = 'rgba(255,255,255,0.65)'; g.fillRect(16, 120, w - 32, 170); g.fillStyle = '#3a3a3a'; for(let i=0;i<4;i++) g.fillRect(28, 150 + i*28, w - 56 - (i%2)*20, 9); g.fillStyle = '#6a5636'; g.fillRect(16, h - 90, w - 32, 6); }
+    else if(design === 2){ g.fillStyle = '#4f4336'; for(const y of [30, h - 40]) g.fillRect(10, y, w - 20, 9); for(let i=0;i<5;i++){ g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(10, 90 + i*70, w - 20, 14); } g.fillStyle = '#3a3a3a'; g.fillRect(30, 220, w - 60, 12); }
+    else { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(0, 0, w, 70); g.fillRect(0, h - 70, w, 70); g.fillStyle = '#f4f0e8'; g.fillRect(26, 180, w - 52, 8); g.fillRect(36, 204, w - 72, 8); g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(0, 300, w, 3); }
+  });
+  const designs = [0, 1, 2, 3].map((d) => { const t = spineTex(d); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; });
+  const groups = designs.map(() => []);
+  bookMats.forEach((m, i) => groups[i % 4].push(i));
   const c = new THREE.Color();
-  bookMats.forEach((m,i)=>{ books.setMatrixAt(i, m); c.set(bookCols[i]).offsetHSL(0, rr(-0.05,0.05), rr(-0.06,0.06)); books.setColorAt(i, c); });
-  books.castShadow = true; books.receiveShadow = true; books.frustumCulled = false; world.add(books);
+  groups.forEach((idx, d) => {
+    if(!idx.length) return;
+    const cover = new THREE.MeshStandardMaterial({roughness:0.75});
+    const spine = new THREE.MeshStandardMaterial({map:designs[d], roughness:0.7});
+    // BoxGeometry faces: +x -x +y -y +z -z; the spine faces the corridor (-x), the covers are the ±z faces
+    const books = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), [cover, spine, cover, cover, cover, cover], idx.length);
+    idx.forEach((i, k) => {
+      books.setMatrixAt(k, bookMats[i]);
+      c.set(bookCols[i]).offsetHSL(0, rr(-0.05, 0.05), rr(-0.06, 0.06)); books.setColorAt(k, c);
+    });
+    books.castShadow = true; books.receiveShadow = true; books.frustumCulled = false; world.add(books);
+  });
 }
 
 
@@ -754,67 +847,91 @@ let signHit, setSignatures;
 // ---------- numbered balloons: the way round the party ----------
 // 1 the wish board, 2 the signature board, 3 the grill; the fourth drifts from the door down to the grassland and back
 function balloonSprite(num, label, col, dark){
-  const c = document.createElement('canvas'); c.width = 256; c.height = 640; const g = c.getContext('2d');
-  const cx = 128, cy = 150, rx = 100, ry = 122;
-  // the balloon, lit from the top left
-  const grd = g.createRadialGradient(cx - 36, cy - 48, 10, cx, cy, ry * 1.15);
-  grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.16, col); grd.addColorStop(0.85, col); grd.addColorStop(1, dark);
-  g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); g.fill();
-  g.fillStyle = dark; g.beginPath(); g.moveTo(cx - 14, cy + ry - 4); g.lineTo(cx + 14, cy + ry - 4); g.lineTo(cx, cy + ry + 18); g.closePath(); g.fill();
-  // the string
-  g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + ry + 18);
-  g.bezierCurveTo(cx + 40, cy + ry + 120, cx - 40, cy + ry + 240, cx + 10, 630); g.stroke();
-  // the number and the label
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '700 150px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-  g.lineWidth = 12; g.strokeStyle = dark; g.strokeText(String(num), cx, cy - 10);
-  g.fillStyle = '#ffffff'; g.fillText(String(num), cx, cy - 10);
-  g.font = '700 24px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-  g.lineWidth = 6; g.strokeStyle = dark; g.strokeText(label, cx, cy + 78); g.fillStyle = '#ffffff'; g.fillText(label, cx, cy + 78);
+  // a glossy balloon, egg-shaped, with its number printed on it (the texture's middle sits on the balloon's +x,
+  // and the balloon turns so that side faces you), a knot at the bottom, a curling string and a paper tag with the label
+  const g = new THREE.Group();
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512; const cx = c.getContext('2d');
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false}));
-  sp.scale.set(0.56, 1.4, 1); sp.center.set(0.5, 0.5);
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => { /* redraw with the real font */
-    g.clearRect(0,0,256,640);
-    g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); g.fill();
-    g.fillStyle = dark; g.beginPath(); g.moveTo(cx - 14, cy + ry - 4); g.lineTo(cx + 14, cy + ry - 4); g.lineTo(cx, cy + ry + 18); g.closePath(); g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + ry + 18); g.bezierCurveTo(cx + 40, cy + ry + 120, cx - 40, cy + ry + 240, cx + 10, 630); g.stroke();
-    g.font = '700 150px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.lineWidth = 12; g.strokeStyle = dark; g.strokeText(String(num), cx, cy - 10); g.fillStyle = '#ffffff'; g.fillText(String(num), cx, cy - 10);
-    g.font = '700 24px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.lineWidth = 6; g.strokeStyle = dark; g.strokeText(label, cx, cy + 78); g.fillStyle = '#ffffff'; g.fillText(label, cx, cy + 78);
+  const paint = () => {
+    cx.fillStyle = col; cx.fillRect(0, 0, 1024, 512);
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.font = '700 300px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    cx.lineWidth = 22; cx.strokeStyle = dark; cx.strokeText(String(num), 512, 236);
+    cx.fillStyle = '#ffffff'; cx.fillText(String(num), 512, 236);
     tex.needsUpdate = true;
-  });
-  return sp;
+  };
+  paint();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(paint);
+  const skin = new THREE.MeshPhysicalMaterial({map:tex, roughness:0.18, metalness:0, clearcoat:1, clearcoatRoughness:0.08, sheen:0.4, sheenColor:new THREE.Color(0xffffff)});
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.26, 48, 32), skin); body.scale.set(1, 1.18, 1); body.castShadow = true; g.add(body);
+  const darkMat = new THREE.MeshStandardMaterial({color:dark, roughness:0.4});
+  const knot = mesh(new THREE.ConeGeometry(0.035, 0.05, 10), darkMat, 0, -0.325, 0, false, false); knot.rotation.x = Math.PI; g.add(knot);
+  const ring = mesh(new THREE.TorusGeometry(0.018, 0.008, 8, 16), darkMat, 0, -0.35, 0, false, false); ring.rotation.x = Math.PI/2; g.add(ring);
+  // the string: a curling line down to the tag
+  const pts = []; for(let i=0;i<=24;i++){ const t = i/24; pts.push(new THREE.Vector3(Math.sin(t*9)*0.025*(1-t), -0.36 - t*0.62, Math.cos(t*7)*0.02*(1-t))); }
+  const string = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.003, 5, false), new THREE.MeshStandardMaterial({color:0xf4f1ea, roughness:0.9})); g.add(string);
+  // the tag
+  const tc = document.createElement('canvas'); tc.width = 512; tc.height = 128; const tg = tc.getContext('2d');
+  const ttex = new THREE.CanvasTexture(tc); ttex.colorSpace = THREE.SRGBColorSpace; ttex.anisotropy = maxAniso;
+  const paintTag = () => {
+    tg.fillStyle = '#f7f1e3'; tg.fillRect(0, 0, 512, 128); tg.strokeStyle = dark; tg.lineWidth = 6; tg.strokeRect(5, 5, 502, 118);
+    tg.fillStyle = dark; tg.font = '700 52px "Bricolage Grotesque", ui-sans-serif, sans-serif'; tg.textAlign = 'center'; tg.textBaseline = 'middle';
+    let size = 52; tg.font = '700 ' + size + 'px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+    while(tg.measureText(label).width > 470 && size > 30){ size -= 2; tg.font = '700 ' + size + 'px "Bricolage Grotesque", ui-sans-serif, sans-serif'; }
+    tg.fillText(label, 256, 66); ttex.needsUpdate = true;
+  };
+  paintTag();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(paintTag);
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.1), new THREE.MeshStandardMaterial({map:ttex, roughness:0.9, side:THREE.DoubleSide})); tag.position.set(0, -1.02, 0); g.add(tag);
+  g.userData.body = body; g.userData.tag = tag; g.userData.mat = skin;
+  return g;
 }
 const guideBalloons = [];
 {
   const specs = [
-    [1, 'send a greeting', '#e8485b', '#8d1f2e', [-0.95, 1.95, -2.7]],
-    [2, 'sign the board', '#3f8ae6', '#1d4a8a', [1.05, 3.45, -11.95]],
-    [3, 'the grill', '#f0962e', '#9a5210', [-4.6, 2.35, -6.7]],
+    [1, 'send a greeting', '#e8485b', '#8d1f2e', [-0.95, 2.05, -2.7]],
+    [2, 'sign the board', '#3f8ae6', '#1d4a8a', [1.05, 3.55, -11.95]],
+    [3, 'the grill', '#f0962e', '#9a5210', [-4.6, 2.45, -6.7]],
   ];
   for(const [n, label, col, dark, pos] of specs){
     const sp = balloonSprite(n, label, col, dark); sp.position.set(pos[0], pos[1], pos[2]); world.add(sp);
     guideBalloons.push({ sp, base: pos.slice(), phase: n * 1.7 });
   }
   // the fourth balloon's route: in at the door, across the terrace, down the steps, over the meadow to the gate
-  const route = [[-1.3, 2.2, 1.2], [-2.6, 2.2, -0.9], [-5.6, 2.2, -2.2], [-8.6, 2.1, -3.3], [-11.4, 1.0, -3.3], [-15.5, 0.75, -5.5], [-20.5, 0.7, -9.5], [-25.6, 0.75, -13.4]];
+  const route = [[-1.3, 2.3, 1.2], [-2.6, 2.3, -0.9], [-5.6, 2.3, -2.2], [-8.6, 2.2, -3.3], [-11.4, 1.1, -3.3], [-15.5, 0.85, -5.5], [-20.5, 0.8, -9.5], [-25.6, 0.85, -13.4]];
   const curve = new THREE.CatmullRomCurve3(route.map((r) => new THREE.Vector3(r[0], r[1], r[2])), false, 'centripetal', 0.5);
   const sp = balloonSprite(4, 'to the grassland', '#3bb273', '#1d6b43'); world.add(sp);
-  guideBalloons.push({ sp, phase: 4.2, route: curve, t: 0, len: curve.getLength(), wait: 0, pos: new THREE.Vector3() });
+  guideBalloons.push({ sp, phase: 4.2, route: curve, t: 0, len: curve.getLength(), wait: 0, pos: new THREE.Vector3(), fade: 1 });
 }
-function tickBalloons(dt, time){
+function faceBalloon(b, cam){
+  // turn the printed side (+x) and the tag towards the camera
+  if(!cam) return;
+  const dx = cam.x - b.sp.position.x, dz = cam.z - b.sp.position.z;
+  b.sp.rotation.y = Math.atan2(-dz, dx);
+  b.sp.userData.tag.rotation.y = Math.PI/2;
+}
+function setBalloonFade(b, k){
+  const m = b.sp.userData.mat; m.transparent = k < 0.999; m.opacity = k;
+  b.sp.userData.tag.material.transparent = k < 0.999; b.sp.userData.tag.material.opacity = k;
+  b.sp.visible = k > 0.01;
+}
+function tickBalloons(dt, time, cam){
   for(const b of guideBalloons){
     if(!b.route){
       b.sp.position.set(b.base[0] + Math.sin(time*0.7 + b.phase)*0.06, b.base[1] + Math.sin(time*1.3 + b.phase)*0.09, b.base[2] + Math.cos(time*0.9 + b.phase)*0.06);
+      b.sp.rotation.z = Math.sin(time*0.9 + b.phase)*0.05;
+      faceBalloon(b, cam);
       continue;
     }
     // drift along the route at walking pace, wait at the gate, fade, and start again at the door
-    if(b.wait > 0){ b.wait -= dt; b.sp.material.opacity = Math.min(1, Math.max(0, b.wait < 1 ? b.wait : 1)); if(b.wait <= 0){ b.t = 0; } continue; }
+    if(b.wait > 0){ b.wait -= dt; setBalloonFade(b, Math.min(1, Math.max(0, b.wait < 1 ? b.wait : 1))); if(b.wait <= 0){ b.t = 0; } continue; }
     b.t += dt * 1.15 / b.len;
     if(b.t >= 1){ b.t = 1; b.wait = 4; }
     b.route.getPointAt(Math.min(1, Math.max(0, b.t)), b.pos);
-    b.sp.material.opacity = Math.min(1, b.t * b.len / 2) * Math.min(1, (1 - b.t) * b.len / 1.5 + 0.35);
+    setBalloonFade(b, Math.min(1, b.t * b.len / 2) * Math.min(1, (1 - b.t) * b.len / 1.5 + 0.35));
     b.sp.position.set(b.pos.x + Math.sin(time*0.8 + b.phase)*0.05, b.pos.y + Math.sin(time*1.4 + b.phase)*0.08, b.pos.z);
+    b.sp.rotation.z = Math.sin(time*0.9 + b.phase)*0.06;
+    faceBalloon(b, cam);
   }
 }
 
@@ -888,18 +1005,31 @@ let setGrill;
   const black = new THREE.MeshStandardMaterial({color:0x1d1c1b, roughness:0.45, metalness:0.35});
   const steel = new THREE.MeshStandardMaterial({color:0xaeb2b5, roughness:0.35, metalness:0.8});
   const R = 0.28, Y = 0.74;
-  gg.add(mesh(new THREE.SphereGeometry(R, 28, 14, 0, Math.PI*2, Math.PI/2, Math.PI/2), black, 0, Y, 0));
-  const rim = mesh(new THREE.TorusGeometry(R, 0.012, 8, 40), steel, 0, Y, 0); rim.rotation.x = Math.PI/2; gg.add(rim);
+  const blackGloss = new THREE.MeshPhysicalMaterial({color:0x1d1c1b, roughness:0.35, metalness:0.2, clearcoat:0.6, clearcoatRoughness:0.25});
+  gg.add(mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, Math.PI/2, Math.PI/2), blackGloss, 0, Y, 0));
+  const rim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, 0, Y, 0); rim.rotation.x = Math.PI/2; gg.add(rim);
   // lid, hinged open at the back
   const hinge = new THREE.Group(); hinge.position.set(-R, Y, 0); hinge.rotation.z = 1.95; gg.add(hinge);
-  const lid = mesh(new THREE.SphereGeometry(R, 28, 14, 0, Math.PI*2, 0, Math.PI/2), black, R, 0, 0); hinge.add(lid);
-  const lidRim = mesh(new THREE.TorusGeometry(R, 0.012, 8, 40), steel, R, 0, 0); lidRim.rotation.x = Math.PI/2; hinge.add(lidRim);
-  hinge.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 8), steel, R, R+0.03, 0));
-  hinge.add(mesh(new THREE.TorusGeometry(0.02, 0.006, 6, 16), steel, R, R+0.11, 0));
+  const lid = mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, 0, Math.PI/2), blackGloss, R, 0, 0); hinge.add(lid);
+  const lidRim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, R, 0, 0); lidRim.rotation.x = Math.PI/2; hinge.add(lidRim);
+  // the lid's handle (a wooden grip on two steel posts), its vent and a little thermometer
+  for(const dz of [-0.06, 0.06]) hinge.add(mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.07, 8), steel, R, R+0.03, dz));
+  const grip = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 12), new THREE.MeshStandardMaterial({color:0x6b4a2c, roughness:0.6}), R, R+0.07, 0); grip.rotation.x = Math.PI/2; hinge.add(grip);
+  hinge.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 16), steel, R + 0.12, R*0.9, 0.1, false, false));
+  for(let k=0;k<4;k++) hinge.add(mesh(new THREE.BoxGeometry(0.035, 0.002, 0.004), black, R + 0.12, R*0.9 + 0.005, 0.1 - 0.012 + k*0.008, false, false));
+  const thermo = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 20), new THREE.MeshStandardMaterial({color:0xf2efe8, roughness:0.5}), R - 0.1, R*0.93, -0.1, false, false); thermo.rotation.x = -0.3; hinge.add(thermo);
+  const thermoRim = mesh(new THREE.TorusGeometry(0.022, 0.004, 6, 24), steel, R - 0.1, R*0.93, -0.1, false, false); thermoRim.rotation.x = Math.PI/2 - 0.3; hinge.add(thermoRim);
   // grate and coals
-  const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 28), new THREE.MeshStandardMaterial({color:0x3a2a22, emissive:0xff5a1a, emissiveIntensity:0.9, roughness:1}));
+  const emberTex = makeTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#1a1210'; g.fillRect(0, 0, w, h);
+    for(let i=0;i<90;i++){ const x = rand()*w, y = rand()*h, r = rr(8, 26); const grd = g.createRadialGradient(x, y, 0, x, y, r); grd.addColorStop(0, `rgba(255,${rr(90, 170)|0},30,0.95)`); grd.addColorStop(0.6, 'rgba(200,60,10,0.5)'); grd.addColorStop(1, 'rgba(60,20,10,0)'); g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fill(); }
+    for(let i=0;i<60;i++){ g.fillStyle = `rgba(30,22,20,${rr(0.5, 0.9)})`; g.beginPath(); g.ellipse(rand()*w, rand()*h, rr(6, 16), rr(4, 10), rand()*3, 0, Math.PI*2); g.fill(); }
+  });
+  const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 40), new THREE.MeshStandardMaterial({map:emberTex, emissiveMap:emberTex, emissive:0xffffff, emissiveIntensity:1.1, roughness:1}));
   coals.rotation.x = -Math.PI/2; coals.position.y = Y - 0.12; gg.add(coals);
-  for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 6), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; gg.add(bar); }
+  for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 8), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; gg.add(bar); }
+  for(const x of [-0.16, 0.16]){ const cross = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.44, 8), steel, x, Y+0.0, 0); cross.rotation.x = Math.PI/2; gg.add(cross); }
+  const grateRing = mesh(new THREE.TorusGeometry(R*0.9, 0.004, 6, 48), steel, 0, Y+0.003, 0); grateRing.rotation.x = Math.PI/2; gg.add(grateRing);
   // what's cooking: little avatar sausages — the supervisor, in cartoon, wrapped round each one. Visitors add them
   // from the board beside the grill; up to 16 show on the grate (two layers), the board carries the full count.
   const SR = 0.033, SL = 0.10;
@@ -933,7 +1063,19 @@ let setGrill;
     leg.rotation.z = -ax*0.22; leg.rotation.x = az*0.22; gg.add(leg);
     if(wheel){ const wh = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 18), black, ax*0.3, 0.07, az*0.3); wh.rotation.x = Math.PI/2; gg.add(wh); }
   }
-  gg.add(mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.04, 20), black, 0, Y-R-0.06, 0));
+  gg.add(mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.04, 24), black, 0, Y-R-0.06, 0));
+  // a slatted side shelf with the tongs, a brush and a jar of mustard
+  { const slat = new THREE.MeshStandardMaterial({color:0x8a6a44, roughness:0.75});
+    for(let k=0;k<4;k++) gg.add(mesh(new THREE.BoxGeometry(0.3, 0.012, 0.045), slat, 0.1, Y - 0.02, R + 0.08 + k*0.055));
+    for(const x of [-0.04, 0.24]) gg.add(mesh(new THREE.BoxGeometry(0.012, 0.012, 0.22), steel, x, Y - 0.03, R + 0.16));
+    for(const x of [-0.04, 0.24]){ const brace = mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.26, 6), steel, x, Y - 0.13, R + 0.08); brace.rotation.x = 0.6; gg.add(brace); }
+    const tongs = new THREE.Group(); tongs.position.set(0.06, Y - 0.01, R + 0.17); tongs.rotation.y = 0.4; gg.add(tongs);
+    for(const dz of [-0.012, 0.012]){ const t = mesh(new THREE.BoxGeometry(0.26, 0.006, 0.012), steel, 0, 0, dz, false, false); tongs.add(t); }
+    tongs.add(mesh(new THREE.BoxGeometry(0.03, 0.01, 0.04), new THREE.MeshStandardMaterial({color:0x2a2a2a}), -0.11, 0, 0, false, false));
+    const jar = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 16), new THREE.MeshStandardMaterial({color:0xd9a520, roughness:0.4}), 0.2, Y + 0.025, R + 0.2); gg.add(jar);
+    gg.add(mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.015, 16), new THREE.MeshStandardMaterial({color:0xe8e2d6, roughness:0.5}), 0.2, Y + 0.067, R + 0.2, false, false));
+    const brush = mesh(new THREE.CylinderGeometry(0.008, 0.01, 0.18, 8), new THREE.MeshStandardMaterial({color:0x6b4a2c}), 0.22, Y - 0.005, R + 0.1, false, false); brush.rotation.z = Math.PI/2; brush.rotation.y = 0.3; gg.add(brush);
+  }
   // smoke
   const sc = document.createElement('canvas'); sc.width = sc.height = 64;
   const sg = sc.getContext('2d'); const grd = sg.createRadialGradient(32,32,2,32,32,30); grd.addColorStop(0,'rgba(235,232,228,0.9)'); grd.addColorStop(1,'rgba(235,232,228,0)');
@@ -947,30 +1089,38 @@ let setGrill;
 }
 
 // sandwich boards: a canvas face on an A-frame; look at one and press E (or tap) to use it
-const boardWood = new THREE.MeshStandardMaterial({color:0x5a4634, roughness:0.85});
+const boardWoodTex = woodTex.clone(); boardWoodTex.needsUpdate = true; boardWoodTex.repeat.set(0.5, 0.7);
+const boardWood = new THREE.MeshStandardMaterial({map:boardWoodTex, color:0x7a5a3c, roughness:0.8});
+const paperTex = makeTex(256, 256, (g, w, h) => { g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h); for(let i=0;i<5000;i++){ g.fillStyle = `rgba(${rand()<0.5?200:255},${rand()<0.5?190:245},${rand()<0.5?170:230},0.18)`; g.fillRect(rand()*w, rand()*h, rr(1, 3), 1); } });
 function sandwichBoard(x, z, yaw, kind, paint){
   const bg = new THREE.Group(); bg.position.set(x, 0, z); bg.rotation.y = yaw; world.add(bg);
   const W = 0.64, Hh = 0.84, tilt = 0.17;
-  const bc = document.createElement('canvas'); bc.width = 640; bc.height = 840; const bx = bc.getContext('2d');
+  const bc = document.createElement('canvas'); bc.width = 1024; bc.height = 1344; const bx = bc.getContext('2d');   // drawn at 1.6× the old size
   const bt = new THREE.CanvasTexture(bc); bt.colorSpace = THREE.SRGBColorSpace; bt.anisotropy = maxAniso;
   const redraw = () => {
+    bx.setTransform(1.6, 0, 0, 1.6, 0, 0);
     bx.fillStyle = '#f3ead8'; bx.fillRect(0,0,640,840);
+    const paper = paperTex.image; bx.globalAlpha = 0.5; for(let yy=0; yy<840; yy+=160) for(let xx=0; xx<640; xx+=160) bx.drawImage(paper, xx, yy, 160, 160); bx.globalAlpha = 1;
     bx.strokeStyle = '#2b3a2a'; bx.lineWidth = 10; bx.strokeRect(5,5,630,830);
+    bx.strokeStyle = 'rgba(43,58,42,0.35)'; bx.lineWidth = 2; bx.strokeRect(16,16,608,808);
     bx.textAlign = 'center'; bx.textBaseline = 'middle';
     paint(bx); bt.needsUpdate = true;
   };
   redraw();
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
-  const faceMat = new THREE.MeshStandardMaterial({map:bt, roughness:0.9});
-  const panelGeo = new THREE.PlaneGeometry(W, Hh), frameGeo = new THREE.BoxGeometry(W+0.06, Hh+0.06, 0.025);
+  const faceMat = new THREE.MeshStandardMaterial({map:bt, roughness:0.92});
+  const panelGeo = new THREE.PlaneGeometry(W, Hh), frameGeo = new RoundedBoxGeometry(W+0.07, Hh+0.07, 0.03, 3, 0.01);
   for(const s of [1, -1]){
     const pivot = new THREE.Group(); pivot.position.set(0, 0.95, 0); pivot.rotation.x = -s*tilt; bg.add(pivot);
-    pivot.add(mesh(frameGeo, boardWood, 0, -Hh/2-0.04, s*0.013));
-    const face = new THREE.Mesh(panelGeo, faceMat); face.position.set(0, -Hh/2-0.04, s*0.027);
+    pivot.add(mesh(frameGeo, boardWood, 0, -Hh/2-0.04, s*0.015));
+    const face = new THREE.Mesh(panelGeo, faceMat); face.position.set(0, -Hh/2-0.04, s*0.031);
     if(s < 0) face.rotation.y = Math.PI;
     face.castShadow = true; face.receiveShadow = true; pivot.add(face);
+    // the chain that keeps the legs from splaying
+    const chain = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.26, 5), M.chrome, 0, -Hh - 0.02, s*0.12, false, false); chain.rotation.x = Math.PI/2; bg.add(chain);
   }
-  bg.add(mesh(new THREE.BoxGeometry(W+0.06, 0.045, 0.06), boardWood, 0, 0.96, 0));
+  bg.add(mesh(new THREE.BoxGeometry(W+0.07, 0.05, 0.07), boardWood, 0, 0.96, 0));
+  for(const sx of [-W/2 + 0.04, W/2 - 0.04]){ const h = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.09, 10), M.chrome, sx, 0.965, 0, false, false); h.rotation.z = Math.PI/2; bg.add(h); }
   const hit = new THREE.Mesh(new THREE.BoxGeometry(W+0.1, 1.3, 0.5), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
   hit.position.y = 0.65; hit.userData = {kind}; bg.add(hit);
   addBox(x-0.36, x+0.36, z-0.25, z+0.25);
