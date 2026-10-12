@@ -33,16 +33,22 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- UI copy ----------
 const keys = $('keys'), hint = $('hint');
-// the entrance card's watermark band runs corner to corner, whatever the card's proportions
-const introCard = $('introCard'), introMarks = $('introMarks');
-function layoutMarks() {
-  const r = introCard.getBoundingClientRect(); if (!r.width) return;
-  introMarks.style.width = Math.hypot(r.width, r.height) + 40 + 'px';
-  introMarks.style.transform = 'translate(-50%,-50%) rotate(' + (-Math.atan2(r.height, r.width)) + 'rad)';
+// the entrance card's VR marks: a fresh random scatter each visit — a jittered grid, so they spread over the
+// whole card without piling up; a few cells left empty, sizes, tilts and strengths all drawn at random
+const introMarks = $('introMarks');
+function scatterMarks() {
+  const cols = 4, rows = 6, rnd = Math.random, out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (rnd() < 0.18) continue;
+    const size = Math.round(44 + rnd() * 52);
+    const x = ((c + 0.5 + (rnd() - 0.5) * 0.84) / cols * 100).toFixed(1);
+    const y = ((r + 0.5 + (rnd() - 0.5) * 0.84) / rows * 100).toFixed(1);
+    const rot = Math.round((rnd() - 0.5) * 70), op = (0.13 + rnd() * 0.17).toFixed(2);
+    out.push(`<i style="left:${x}%;top:${y}%;width:${size}px;height:${size}px;opacity:${op};transform:translate(-50%,-50%) rotate(${rot}deg)"></i>`);
+  }
+  introMarks.innerHTML = out.join('');
 }
-layoutMarks(); addEventListener('resize', layoutMarks);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutMarks);
-setTimeout(layoutMarks, 300);
+scatterMarks();
 if (isTouch) {
   keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
   hint.innerHTML = '<b>Left thumb</b> walks · <b>right thumb</b> looks · <b>tap</b> a poster';
