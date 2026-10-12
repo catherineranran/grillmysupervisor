@@ -791,7 +791,7 @@ function balloonSprite(num, label, col, dark){
 const guideBalloons = [];
 {
   const specs = [
-    [1, 'make a wish', '#e8485b', '#8d1f2e', [-0.95, 1.95, -2.7]],
+    [1, 'send a greeting', '#e8485b', '#8d1f2e', [-0.95, 1.95, -2.7]],
     [2, 'sign the board', '#3f8ae6', '#1d4a8a', [1.05, 3.45, -11.95]],
     [3, 'the grill', '#f0962e', '#9a5210', [-4.6, 2.35, -6.7]],
   ];
@@ -1009,16 +1009,20 @@ const wishSign = sandwichBoard(-0.95, -2.7, 0.15, 'wish', (bx) => {
   const n = wishBoard.count;
   for(const c of confetti){ bx.save(); bx.translate(c.x, c.y); bx.rotate(c.a); bx.fillStyle = c.c; bx.globalAlpha = 0.85; bx.fillRect(-c.s/2, -c.s/3, c.s, c.s*0.66); bx.restore(); }
   bx.globalAlpha = 1;
-  bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('BIRTHDAY WISHES', 320, 62);
-  bx.fillStyle = '#2b3a2a'; bx.font = '700 60px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-  bx.fillText('Make a wish', 320, 134); bx.fillText('for the supervisor', 320, 198);
-  drawAvatar(bx, 246, 290);
-  bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-  bx.fillText(n ? n + (n === 1 ? ' wish' : ' wishes') + ' on the wall' : 'No wishes on the wall yet', 320, 598);
-  bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
-  bx.fillText(isTouch ? 'tap here to write one' : 'E / click here to write one', 320, 666);
-  bx.font = '500 23px "DM Mono", ui-monospace, monospace';
-  bx.fillText('it gets pinned on one of the posters', 320, 726); bx.fillText('along the wall', 320, 760);
+  bx.fillStyle = '#5d554d'; bx.font = '500 26px "DM Mono", ui-monospace, monospace'; bx.fillText('GREETINGS FOR THE SUPERVISOR', 320, 62);
+  bx.fillStyle = '#2b3a2a'; bx.font = '700 46px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText('Send your greeting', 320, 128); bx.fillText('messages or appreciations', 320, 182);
+  drawAvatar(bx, 222, 250);
+  bx.fillStyle = '#b5482f'; bx.font = '700 40px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText(n ? n + (n === 1 ? ' message' : ' messages') + ' on the wall' : 'Nothing on the wall yet', 320, 520);
+  bx.fillStyle = '#5d554d'; bx.font = '500 27px "DM Mono", ui-monospace, monospace';
+  bx.fillText(isTouch ? 'tap here to write one' : 'E / click here to write one', 320, 578);
+  bx.font = '500 22px "DM Mono", ui-monospace, monospace';
+  bx.fillText('it gets pinned on one of the posters', 320, 632); bx.fillText('along the wall', 320, 662);
+  bx.fillStyle = '#3f3a35'; bx.font = '600 22px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText('Want to deliver complaints?', 320, 722);
+  bx.font = '500 21px "Bricolage Grotesque", ui-sans-serif, sans-serif';
+  bx.fillText('Follow the sign to the grill,', 320, 756); bx.fillText('or go find the trash-can.', 320, 786);
 });
 const wishHit = wishSign.hit;
 function setWishes(n){ wishBoard.count = n; wishSign.redraw(); }

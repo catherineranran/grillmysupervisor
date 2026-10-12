@@ -33,11 +33,21 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- UI copy ----------
 const keys = $('keys'), hint = $('hint');
+// the entrance card's watermark band runs corner to corner, whatever the card's proportions
+const introCard = $('introCard'), introMarks = $('introMarks');
+function layoutMarks() {
+  const r = introCard.getBoundingClientRect(); if (!r.width) return;
+  introMarks.style.width = Math.hypot(r.width, r.height) + 40 + 'px';
+  introMarks.style.transform = 'translate(-50%,-50%) rotate(' + (-Math.atan2(r.height, r.width)) + 'rad)';
+}
+layoutMarks(); addEventListener('resize', layoutMarks);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(layoutMarks);
+setTimeout(layoutMarks, 300);
 if (isTouch) {
-  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, wish or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
+  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
   hint.innerHTML = '<b>Left thumb</b> walks · <b>right thumb</b> looks · <b>tap</b> a poster';
 } else {
-  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, write a wish, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
+  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, leave a greeting, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
   hint.innerHTML = '<b>Click</b> the scene to look · <b>WASD</b> walk · <b>E</b> read a poster · <b>P</b> all posters · <b>Esc</b> free cursor';
 }
 
@@ -270,7 +280,7 @@ function setHover(obj) {
     promptEl.innerHTML = hover.userData.kind === 'poster' ? '<b>' + key + '</b> · read the notes, leave a kind word'
       : hover.userData.kind === 'gate' ? '<b>' + key + '</b> · the gate to the herding grounds'
       : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
-      : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · make a birthday wish — it goes up on the wall'
+      : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · send a greeting or an appreciation — it goes up on the wall'
       : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
@@ -572,16 +582,16 @@ function posterForWish() {
 let lastWishPoster = null;
 function renderWish() {
   const n = wallNotes.length;
-  wishCount.textContent = n === 0 ? 'The wall is waiting for the first one.' : n === 1 ? 'One wish is up so far.' : n + ' wishes are up so far.';
+  wishCount.textContent = n === 0 ? 'The wall is waiting for the first one.' : n === 1 ? 'One message is up so far.' : n + ' messages are up so far.';
   const ro = (dataMode === 'db' && canWrite === false);
   wishForm.hidden = ro;
   if (ro) wishStatus.textContent = 'Leaving a wish needs a contributor invitation to this corner.';
-  else if (dataMode === 'local' && !wishStatus.textContent) wishStatus.textContent = 'Not connected to the shared wall right now, so your wish stays on this screen.';
+  else if (dataMode === 'local' && !wishStatus.textContent) wishStatus.textContent = 'Not connected to the shared wall right now, so your message stays on this screen.';
 }
 wishForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = wishText.value.trim(), sig = wishSig.value.trim();
-  if (!text) { wishStatus.textContent = 'Write your wish first.'; wishText.focus(); return; }
+  if (!text) { wishStatus.textContent = 'Write your message first.'; wishText.focus(); return; }
   if (dataMode === 'loading') { wishStatus.textContent = 'Still connecting to the wall. Try again in a moment.'; return; }
   const target = posterForWish();
   const doc = { poster: target.n, text, sig, author: myId, at: new Date().toISOString() };

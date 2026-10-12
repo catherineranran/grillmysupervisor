@@ -1,6 +1,6 @@
 # Where the Light Rests · grillmysupervisor.online
 
-A walkable, first-person gallery of sandstone and glass standing on the Ili grassland. Birthday wishes written at the board inside the first door get pinned on the posters above the sofas (the emptiest poster first, nearest the board), kind words can be pinned on any poster directly; complaints go in the one and only bin; on the terrace a grill cooks little avatar sausages that visitors add from the board beside it; alpacas graze on the meadow below.
+A walkable, first-person gallery of sandstone and glass standing on the Ili grassland. Greetings and appreciations written at the board inside the first door get pinned on the glass boards above the sofas (the emptiest poster first, nearest the board), kind words can be pinned on any poster directly; complaints go in the one and only bin; on the terrace a grill cooks little avatar sausages that visitors add from the board beside it; alpacas graze on the meadow below.
 
 Live at **https://grillmysupervisor.online** (GitHub Pages, deployed from the `main` branch).
 
