@@ -285,7 +285,7 @@ function setHover(obj) {
       : hover.userData.kind === 'grill' ? '<b>' + key + '</b> · want to grill the supervisor? Add a sausage'
       : hover.userData.kind === 'wish' ? '<b>' + key + '</b> · send a greeting or an appreciation — it goes up on the wall'
       : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
-      : hover.userData.kind === 'lock' ? '<b>' + key + '</b> · a locked door — Ranran\'s room. Do you know the password?'
+      : hover.userData.kind === 'lock' ? '<b>' + key + '</b> · locked — password required'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -462,12 +462,12 @@ function renderList() {
 $('plistBin').addEventListener('click', () => { listPanel.hidden = true; mode = 'bin'; current = null; board.hidden = false; setStatus(''); renderBoard(); });
 $('mPosters').addEventListener('click', () => { if (boardOpen) closeBoard(); openList(); });
 $('mCredits').addEventListener('click', () => { if (boardOpen) closeBoard(); openCredits(); });
-// the door to Ranran's room: the password is checked here in the page (it is a game, not a vault)
+// the locked door at the back: the password is checked here in the page (it is a game, not a vault)
 const ROOM_PASSWORD = 'geniusRanran';
 lockForm.addEventListener('submit', (e) => {
   e.preventDefault();
   if (lockText.value.trim() === ROOM_PASSWORD) {
-    lockStatus.textContent = 'Click — the door swings open. Come in.';
+    lockStatus.textContent = 'Click — the door swings open.';
     G.openFarDoor();
     const i = G.interactables.indexOf(G.lockHit); if (i >= 0) G.interactables.splice(i, 1);
     setTimeout(() => { if (!lockPanel.hidden) closeBoard(); }, 900);
@@ -851,7 +851,7 @@ function collide() {
   for (const d of DOORS) if (d.angle < -1.1 && player.z > d.z1 + R && player.z < d.z0 - R) { through = d; break; }
   if (through) {
     if (Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, through.z1 + R, through.z0 - R);
-  } else if (player.z < ROOM.z0 && onPlatform(player.x, player.z)) {   // in Ranran's room: its walls and the glass
+  } else if (player.z < ROOM.z0 && onPlatform(player.x, player.z)) {   // in the back room: its walls and the glass
     player.x = THREE.MathUtils.clamp(player.x, ROOM.x0 + R, ROOM.x1 - R); player.z = Math.max(player.z, ROOM.z1 + R);
   } else if (player.x >= XG && onPlatform(player.x, player.z)) player.x = Math.max(player.x, XG + 0.24 + R);
   else if (onPlatform(player.x, player.z)) player.x = Math.min(player.x, XG - 0.24 - R);

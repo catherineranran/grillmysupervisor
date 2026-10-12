@@ -3,6 +3,7 @@ import { COMMON } from './shaders.js';
 import { heightAt } from './terrain.js';
 import { vnoiseTex } from './noiseTexture.js';
 import { smoothstep } from './noise.js';
+import { toLocal, onPlatform } from './siteConst.js';
 
 // A handful of butterflies over the meadow, in place of the bumblebees of the original. They drift from flower to
 // flower in a bouncing, dithering flight, rest a while with their wings slowly opening and closing, and only ever
@@ -157,6 +158,7 @@ export class Butterflies {
     for (let k = 0; k < 14; k++) {
       const a = base + (Math.random() * 2 - 1) * spread, r = r0 + Math.random() * (r1 - r0);
       const px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r;
+      if (onPlatform(...toLocal(px, pz))) continue;   // no flowers on the gallery's platform
       const c = flowerCover(px, pz, this.amount);
       if (c > 0.25) return { x: px, z: pz };
       if (c > bc) { bc = c; best = { x: px, z: pz }; }
