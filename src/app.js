@@ -15,6 +15,7 @@ import { Butterflies } from './butterflies.js';
 import { Fireflies } from './fireflies.js';
 import { Meteors } from './nightSky.js';
 import { Swallows } from './birds.js';
+import { Fireworks } from './fireworks.js';
 import { Soundscape } from './audio.js';
 import { World } from './world.js';
 import { Flock } from './flock.js';
@@ -53,9 +54,9 @@ function scatterMarks() {
 }
 scatterMarks();
 if (isTouch) {
-  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd>';
+  keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd><dt>00:00</dt><dd>slide the clock to midnight and look out over the grassland</dd>';
 } else {
-  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, leave a greeting, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>Esc</dt><dd>free the cursor</dd>';
+  keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, leave a greeting, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>00:00</dt><dd>at midnight, look out over the grassland</dd><dt>Esc</dt><dd>free the cursor</dd>';
 }
 
 // ---------- renderer, scene, lights ----------
@@ -121,6 +122,7 @@ scene.add(flowers);
 const butterflies = new Butterflies(scene, U, tuning, isTouch ? 3 : 5);   // in place of the original's bumblebees: a few, and silent
 const fireflies = new Fireflies(scene, isTouch ? 110 : 240);                // 萤火虫, over the meadow in the evenings
 const swallows = new Swallows(scene, U, isTouch ? 5 : 8);                  // wheeling over the meadow by day
+const fireworks = new Fireworks(scene);                                     // 烟花 at midnight, over the grassland
 const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
@@ -290,6 +292,7 @@ function setHover(obj) {
       : hover.userData.kind === 'sign' ? '<b>' + key + '</b> · sign the birthday board'
       : hover.userData.kind === 'lock' ? '<b>' + key + '</b> · locked — password required'
       : hover.userData.kind === 'fire' ? '<b>' + key + '</b> · toast a marshmallow for the supervisor'
+      : hover.userData.kind === 'portal' ? '<b>' + key + '</b> · ' + hover.userData.title + ': ' + hover.userData.sub + ' — opens on ranranli.net'
       : '<b>' + key + '</b> · the bin. Complaints go here';
     promptEl.classList.add('on');
   } else promptEl.classList.remove('on');
@@ -308,6 +311,7 @@ let wallNotes = [], binNotes = [], grillNotes = [], signNotes = [], fireNotes = 
 const signPanel = $('signp'), signForm = $('signForm'), signName = $('signName'), signBtn = $('signBtn'), signStatus = $('signStatus'), signCount = $('signCount'), signList = $('signList');
 const grillPanel = $('grill'), grillForm = $('grillForm'), grillSig = $('grillSig'), grillBtn = $('grillBtn'), grillStatus = $('grillStatus'), grillCount = $('grillCount'), grillRecent = $('grillRecent');
 const firePanel = $('fire'), fireForm = $('fireForm'), fireSig = $('fireSig'), fireBtn = $('fireBtn'), fireStatus = $('fireStatus'), fireCount = $('fireCount'), fireRecent = $('fireRecent');
+const portalPanel = $('portal'), portalEyebrow = $('portalEyebrow'), portalTitle = $('portalTitle'), portalText = $('portalText'), portalGo = $('portalGo');
 const wishPanel = $('wish'), wishForm = $('wishForm'), wishText = $('wishText'), wishSig = $('wishSig'), wishBtn = $('wishBtn'), wishStatus = $('wishStatus'), wishCount = $('wishCount'), wishSee = $('wishSee');
 try { grillSig.value = wishSig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
 try { saySig.value = localStorage.getItem('wlr-sig') || ''; } catch (e) {}
@@ -436,6 +440,11 @@ function openBoard(obj) {
   if (obj.userData.kind === 'lock') { openPanel(lockPanel); lockStatus.textContent = ''; lockText.value = ''; if (!isTouch) setTimeout(() => lockText.focus(), 50); return; }
   if (obj.userData.kind === 'grill') { openPanel(grillPanel); grillStatus.textContent = ''; renderGrill(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
   if (obj.userData.kind === 'fire') { openPanel(firePanel); fireStatus.textContent = ''; renderFire(); if (dataMode === 'rest') rest.load().catch(() => {}); return; }
+  if (obj.userData.kind === 'portal') {
+    const d = obj.userData;
+    portalEyebrow.textContent = d.sub; portalTitle.textContent = d.title; portalText.textContent = d.blurb + ' It lives on its own page, so opening it takes you to ranranli.net in a new tab.';
+    portalGo.href = d.url; openPanel(portalPanel); return;
+  }
   if (obj.userData.kind === 'wish') { openPanel(wishPanel); wishStatus.textContent = ''; wishSee.hidden = true; renderWish(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => wishText.focus(), 50); return; }
   if (obj.userData.kind === 'sign') { openPanel(signPanel); signStatus.textContent = ''; askingFor = null; renderSign(); renderHands(); padRedraw(); if (dataMode === 'rest') rest.load().catch(() => {}); if (!isTouch) setTimeout(() => signName.focus(), 50); return; }
   if (obj.userData.kind === 'poster') { mode = 'poster'; current = posters[obj.userData.n - 1]; }
@@ -454,7 +463,7 @@ function openCredits() { if (boardOpen) return; openPanel(creditsPanel); }
 function closeBoard() {
   if (!boardOpen) return;
   boardOpen = false; askingFor = null; setStatus('');
-  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel, firePanel]) el.hidden = true;
+  for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel, firePanel, portalPanel]) el.hidden = true;
   canvas.focus(); if (!isTouch) tryLock();
 }
 function posterTitle(p) { return (p.title || 'Leave a kind word').replace('\n', ' '); }
@@ -496,7 +505,7 @@ $('mSound').addEventListener('click', () => {
   $('mSound').innerHTML = 'Sound <b>' + (on ? 'off' : 'on') + '</b>';
 });
 for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', closeBoard);
-for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
+for (const el of [board, gatePanel, listPanel, creditsPanel, grillPanel, wishPanel, signPanel, lockPanel, firePanel, portalPanel]) el.addEventListener('pointerdown', (e) => { if (e.target === el) closeBoard(); });
 
 // ---------- the birthday signature board ----------
 const setSignStatus = (t) => { signStatus.textContent = t; };
@@ -878,6 +887,7 @@ function setClock(mins) {
   starK = THREE.MathUtils.clamp((-sunEl - 3) / 9, 0, 1);
   sky.material.uniforms.uStars.value = starK;
   fireflyK = THREE.MathUtils.smoothstep(-sunEl, -1, 7);   // the fireflies come out as the sun goes down
+  fireworks.active = mins % 1440 === 0;                    // midnight: the fireworks
   G.setDaylight(dayK);
   sky.material.uniforms.uSunGlow.value.set(useMoon ? '#c8d4ff' : PALETTE.sunGlow);
   // the standing lamps burn from 18:00 to 06:00
@@ -1064,11 +1074,14 @@ function frame() {
   }
   G.tickSmoke(dt);
   { const [clx, clz] = toLocal(camera.position.x, camera.position.z); G.tickBalloons(dt, time, { x: clx, z: clz }); }
+  G.tickPhotos(dt, time);
   G.tickFarDoor(dt);
   meteors.update(dt, starK);
   G.tickFire(dt, time, 1 - dayK);
   if (G.tickOwl(dt, time, 1 - dayK)) sound.owl(G.owlWorld.x, G.owlWorld.y, G.owlWorld.z);
   swallows.update(dt, time, dayK);
+  fireworks.material.uniforms.uPixelRatio.value = dpr;
+  fireworks.update(dt, time, camera.position, (p, big) => sound.boom(p.x, p.y, p.z, big));
 
   // the valley's sounds belong to the valley: silent in the gallery and on the terrace, fading in on the way down the steps
   const outdoors = onPlatform(player.x, player.z) ? 0
@@ -1117,5 +1130,5 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors, __birds: swallows });
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors, __birds: swallows, __fw: fireworks, __toWorld: toWorld, __toLocal: toLocal });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));

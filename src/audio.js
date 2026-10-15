@@ -52,6 +52,7 @@ export class Soundscape {
     comp.connect(ctx.destination);
     this.master = ctx.createGain();
     this.master.connect(comp);
+    this.comp = comp;
     this.bus = {};
     for (const k of ['wind', 'water', 'sheep', 'bees', 'birds', 'music']) {
       const g = ctx.createGain();
@@ -294,6 +295,7 @@ export class Soundscape {
   buildFire() {
     const ctx = this.ctx;
     this.fx = ctx.createGain(); this.fx.gain.value = 1; this.fx.connect(this.master);   // outside the tuning's buses
+    this.loud = ctx.createGain(); this.loud.gain.value = 0.7; this.loud.connect(this.comp);   // the fireworks: not silenced indoors like the valley's sounds, only muffled (see update)
     const pan = this.panner(2.2, 1.25);
     pan.connect(this.fx);
     const bed = this.loop(this.brown);
@@ -312,6 +314,30 @@ export class Soundscape {
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
     src.connect(g).connect(f.pops);
     src.start(t, Math.random() * 3); src.stop(t + d + 0.01);
+  }
+
+  // —— a firework bursting: a thud, a crackling rumble, heard after the flash by the distance ——
+  boom(x, y, z, size = 1) {
+    const ctx = this.ctx;
+    if (!ctx || !this.loud) return;
+    const L = ctx.listener, lx = L.positionX ? L.positionX.value : 0, ly = L.positionY ? L.positionY.value : 0, lz = L.positionZ ? L.positionZ.value : 0;
+    const dist = Math.hypot(x - lx, y - ly, z - lz);
+    const t = ctx.currentTime + 0.03 + dist / 340;
+    const p = this.panner(25, 0.5);
+    this.setPos(p, x, y, z);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420 * size;
+    lp.connect(p).connect(this.loud);
+    const thud = ctx.createOscillator(); thud.type = 'sine';
+    thud.frequency.setValueAtTime(110 * size, t); thud.frequency.exponentialRampToValueAtTime(38, t + 0.35);
+    const tg = ctx.createGain(); tg.gain.setValueAtTime(0, t); tg.gain.linearRampToValueAtTime(0.9 * size, t + 0.012); tg.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    thud.connect(tg).connect(lp); thud.start(t); thud.stop(t + 0.55);
+    const rum = ctx.createBufferSource(); rum.buffer = this.brown;
+    const rg = ctx.createGain(); rg.gain.setValueAtTime(0, t); rg.gain.linearRampToValueAtTime(0.6 * size, t + 0.02); rg.gain.exponentialRampToValueAtTime(0.001, t + rand(0.9, 1.4));
+    rum.connect(rg).connect(lp); rum.start(t, Math.random() * 4); rum.stop(t + 1.5);
+    const crk = ctx.createBufferSource(); crk.buffer = this.white;
+    const cf = ctx.createBiquadFilter(); cf.type = 'bandpass'; cf.frequency.value = 2600; cf.Q.value = 0.8;
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0, t + 0.05); cg.gain.linearRampToValueAtTime(0.08 * size, t + 0.08); cg.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    crk.connect(cf).connect(cg).connect(p); crk.start(t, Math.random() * 3); crk.stop(t + 0.8);
   }
 
   // —— the owl: two soft low hoots and a longer one, from its perch on the gate ——
@@ -376,6 +402,7 @@ export class Soundscape {
     const now = ctx.currentTime;
     const set = (param, v, tc = 0.15) => param.setTargetAtTime(v, now, tc);
     set(this.master.gain, T.master * (this.ambience ?? 1), 0.3);   // ambience: 0 inside the gallery, 1 out on the grass (app.js)
+    if (this.loud) set(this.loud.gain, 0.7 * T.master * (0.4 + 0.6 * (this.ambience ?? 1)), 0.3);
     for (const k of Object.keys(this.bus)) set(this.bus[k].gain, k === 'music' && !this.musicOn ? 0 : T[k] ?? 0, 0.2);
 
     // 听者跟着相机

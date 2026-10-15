@@ -195,6 +195,7 @@ function cutoutMesh(geo, mat, cast){
 }
 const T = {
   banner: loadTex('assets/banner.png'),
+  photos: loadTex('assets/photos.png'),
   bow: loadTex('assets/bow.png'),
   tulip: loadTex('assets/tulip.png'),
   minerva: loadTex('assets/minerva.png'),
@@ -203,6 +204,7 @@ const T = {
   avatar: loadTex('assets/avatar.png', {onLoad: () => { if(grillSign) grillSign.redraw(); if(wishSign) wishSign.redraw(); }}),
 };
 M.flag = cutoutMat(T.banner);
+M.photo = cutoutMat(T.photos);
 M.bow = cutoutMat(T.bow);
 M.tulip = cutoutMat(T.tulip, {roughness:0.7});
 M.minerva = new THREE.MeshStandardMaterial({map:T.minerva, transparent:true, depthWrite:false, roughness:0.95, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
@@ -341,7 +343,7 @@ M.bark = new THREE.MeshStandardMaterial({map:barkTex, roughness:0.95});
 const TREES = [
   {x:-12.4,z:1.8,h:11,r:4.2}, {x:-13.5,z:-15,h:9.5,r:3.6}, {x:-11,z:-27,h:10.5,r:4},
   {x:-14,z:-39,h:12,r:4.4}, {x:-11.8,z:-52,h:9,r:3.5}, {x:-13,z:-64,h:11,r:4}, {x:-12,z:9,h:10,r:3.8},
-  {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-12.5,z:-76,h:10,r:3.8},
+  {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-13.9,z:-76,h:10,r:3.6},
 ];
 {
   // the crowns: rounded clumps of leaves for the mass, and cards of drawn leaf clusters over them for the lace
@@ -944,30 +946,75 @@ for(let i=0;i<FLAGS;i++){
   flagGeos.push(g);
 }
 const bowGeo = new THREE.PlaneGeometry(0.22, 0.183);
+
+// Two more pennants with real photos: each person is cut out of the picture in two layers (head and body, in
+// assets/photos.png) so they can come alive on the string — the body sways from its base and the head bobbles on
+// the neck, like a paper figure in a draught. Sizes are in pennant pixels (320x440 per flag), as the atlas was laid out.
+const PHOTOS = [
+  {frame:[0, 0, 640, 880], head:[1280, 0, 371, 512], body:[1664, 0, 371, 512], w:165.5, h:228.2, cx:0, bottom:274, neck:[0.475, 0.521]},
+  {frame:[640, 0, 640, 880], head:[1280, 512, 384, 453], body:[1664, 512, 384, 453], w:194.2, h:229.4, cx:0, bottom:274, neck:[0.499, 0.53]},
+];
+const PX = 0.27/320, ATLAS = [2048, 1024];
+function atlasUV(geo, r){
+  const uv = geo.attributes.uv, u0 = r[0]/ATLAS[0], u1 = (r[0]+r[2])/ATLAS[0], vT = 1 - r[1]/ATLAS[1], vB = 1 - (r[1]+r[3])/ATLAS[1];
+  for(let k=0;k<uv.count;k++) uv.setXY(k, u0 + uv.getX(k)*(u1-u0), vB + uv.getY(k)*(vT-vB));
+  return geo;
+}
+const photoGeos = PHOTOS.map(p => {
+  const frame = atlasUV(new THREE.PlaneGeometry(0.27, 0.37), p.frame); frame.translate(0, -0.185, 0);
+  const w = p.w*PX, h = p.h*PX, nx = (p.neck[0]-0.5)*w, ny = p.neck[1]*h;
+  const body = atlasUV(new THREE.PlaneGeometry(w, h), p.body); body.translate(0, h/2, 0);            // origin at its base
+  const head = atlasUV(new THREE.PlaneGeometry(w, h), p.head); head.translate(-nx, h/2 - ny, 0);     // origin at the neck
+  return { frame, body, head, base: new THREE.Vector3(p.cx*PX, -p.bottom*PX, 0.0025), neck: new THREE.Vector3(nx, ny, 0.002) };
+});
+const livePhotos = [];
+function photoFlag(i){
+  const g = new THREE.Group(), pg = photoGeos[i];
+  g.add(cutoutMesh(pg.frame, M.photo, true));
+  const body = cutoutMesh(pg.body, M.photo, true); body.position.copy(pg.base); g.add(body);
+  const head = cutoutMesh(pg.head, M.photo, true); head.position.copy(pg.neck); body.add(head);
+  livePhotos.push({ body, head, ph: rr(0, 6.28), w: rr(0.9, 1.15) });
+  return g;
+}
+function tickPhotos(dt, time){
+  for(const p of livePhotos){
+    const t = time*p.w + p.ph;
+    // the body leans a touch from side to side and breathes; the head nods and tilts on the neck, with the odd quick double-nod
+    p.body.rotation.z = 0.03*Math.sin(t*1.1) + 0.012*Math.sin(t*2.3 + 1.0);
+    const b = 1 + 0.01*Math.sin(t*1.7); p.body.scale.set(b, b, 1);
+    const nod = Math.max(0, Math.sin(t*0.37 + 0.6)) ** 6;
+    p.head.rotation.z = 0.11*Math.sin(t*1.9) + 0.03*Math.sin(t*4.1 + 0.7);
+    p.head.rotation.x = 0.06*Math.sin(t*1.3 + 2.0) + 0.12*nod*Math.sin(t*7.0);
+    p.head.rotation.y = 0.10*Math.sin(t*0.8 + 1.2);
+  }
+}
+
 function banner(zc, span, yEnd, sag, scale){
   const g = new THREE.Group(); world.add(g);
   const pts = [];
   for(let i=0;i<=24;i++){ const t = i/24, u = 2*t-1; pts.push(new THREE.Vector3(XW-0.075, yEnd - sag*(1-u*u), zc + span/2 - t*span)); }
   const curve = new THREE.CatmullRomCurve3(pts);
   g.add(mesh(new THREE.TubeGeometry(curve, 48, 0.004, 5, false), M.string, 0,0,0, false, false));
-  for(let i=0;i<FLAGS;i++){
-    const t = (i + 0.5)/FLAGS;
+  // the fifteen drawn portraits with the two photographs among them
+  const seq = []; for(let i=0;i<FLAGS;i++){ if(i === 5) seq.push(-1); if(i === 11) seq.push(-2); seq.push(i); }
+  seq.forEach((id, k) => {
+    const t = (k + 0.5)/seq.length;
     const p = curve.getPointAt(t);
-    const f = cutoutMesh(flagGeos[i], M.flag, true);
+    const f = id >= 0 ? cutoutMesh(flagGeos[id], M.flag, true) : photoFlag(-id - 1);
     f.position.copy(p); f.position.x -= 0.004;
     f.rotation.set(0, -Math.PI/2, 0);
     f.rotateX(rr(-0.08, 0.08)); f.rotateZ(rr(-0.03, 0.03));
     f.scale.setScalar(scale);
     g.add(f);
-  }
+  });
   for(const s of [-1, 1]){
     const b = cutoutMesh(bowGeo, M.bow, false);
     b.position.set(XW-0.07, yEnd + 0.02, zc + s*span/2); b.rotation.set(0, -Math.PI/2, 0); b.scale.setScalar(scale*1.1);
     g.add(b);
   }
 }
-for(const z0 of [32, 12, -1.8, -24, -46]) banner(z0 - 1.1, 4.1, 2.52, 0.36, 1);
-for(const z of [20, -16, -38, -60]) banner(z, 2.7, 2.5, 0.3, 0.78);
+for(const z0 of [32, 12, -1.8, -24, -46]) banner(z0 - 1.1, 4.3, 2.52, 0.36, 1);
+for(const z of [20, -16, -38, -60]) banner(z, 2.85, 2.5, 0.3, 0.78);
 
 // ---------- MPI boards leaning by the shelves ----------
 {
@@ -1500,7 +1547,7 @@ const ROOM = { x0: -8.75, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside 
 const VIEW = { z1: Z1 - 17.75, h: 7.0 };                             // the chamber beyond the glass: 7.5 m deep, so the painted peaks stand tall in the window
 const FARDOOR = { x0: 0.0, x1: 1.2, h: 2.4, angle: 0, target: 0, open: false, pivot: null, box: null };
 let lockHit, setDaylight, setScreen, openFarDoor, tickFarDoor;
-const screens = [];
+const screens = [], portalHits = [];
 {
   const OUT0 = -9.1, OUT1 = 2.35, endZ = Z1 - 0.12;
   // the corridor's far end wall, now right across the platform, with the doorway in it
@@ -1566,51 +1613,86 @@ const screens = [];
     for(let i=0;i<9;i++) for(let j=0;j<7;j++){ const x = 70 + i*46, y = 70 + j*38; g.beginPath(); g.moveTo(x, y-10); g.lineTo(x+10, y); g.lineTo(x, y+10); g.lineTo(x-10, y); g.closePath(); g.fill(); }
     for(let i=0;i<4000;i++){ g.fillStyle = `rgba(${rand()<0.5?40:230},${rand()<0.5?20:200},${rand()<0.5?20:150},0.06)`; g.fillRect(rand()*w, rand()*h, 2, 2); }
   });
-  const rug = mesh(new THREE.PlaneGeometry(4.4, 3.2), new THREE.MeshStandardMaterial({map:rugTex, roughness:1}), (ROOM.x0 + ROOM.x1)/2, 0.006, (ROOM.z0 + ROOM.z1)/2 - 0.4, false, true);
+  const rug = mesh(new THREE.PlaneGeometry(4.4, 3.0), new THREE.MeshStandardMaterial({map:rugTex, roughness:1}), (ROOM.x0 + ROOM.x1)/2, 0.006, Z1 - 3.6, false, true);
   rug.rotation.x = -Math.PI/2; world.add(rug);
   lamp(ROOM.z1 + 0.7, ROOM.x0 + 0.5); lamp(ROOM.z1 + 0.7, ROOM.x1 - 0.55);
   plant(Z1 - 1.3, ROOM.x0 + 0.55);
 
-  // the four standing screens, two along each side wall, turned a little towards the door
-  function screenTex(i){
-    const looks = [['#f7d9c4', '#8fb4dc', '#f2b27a'], ['#dcebd2', '#2f6b57', '#cfe3a6'], ['#d4e9f4', '#1f5f8b', '#9dd3e8'], ['#f3c9a3', '#4a3d7a', '#e58f7a']];
-    const [top, bottom, glow] = looks[i % looks.length];
-    return makeTex(1024, 576, (g, w, h) => {
-      const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, top); sky.addColorStop(1, bottom); g.fillStyle = sky; g.fillRect(0, 0, w, h);
-      const sun = g.createRadialGradient(w*0.68, h*0.58, 0, w*0.68, h*0.58, h*0.5); sun.addColorStop(0, glow); sun.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = sun; g.fillRect(0, 0, w, h);
-      g.fillStyle = 'rgba(0,0,0,0.18)'; g.beginPath(); g.moveTo(0, h*0.72);
-      for(let x = 0; x <= w; x += 16) g.lineTo(x, h*0.72 - Math.abs(Math.sin(x*0.004 + i)*40 + Math.sin(x*0.013 + i*2)*14));
-      g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.14)'; g.fillRect(0, 0, w, h);
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillStyle = 'rgba(20,24,32,0.78)'; g.font = '500 34px "DM Mono", ui-monospace, monospace'; g.fillText('ENVIRONMENT  ' + (i + 1), w/2, h*0.36);
-      g.fillStyle = 'rgba(20,24,32,0.9)'; g.font = '700 86px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText('coming soon', w/2, h*0.52);
-      g.fillStyle = 'rgba(20,24,32,0.6)'; g.font = '500 26px "DM Mono", ui-monospace, monospace'; g.fillText('to be added by Ranran', w/2, h*0.64);
-      g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 4; g.strokeRect(26, 26, w-52, h-52);
-    });
+  // three standing screens in a row across the middle of the room, facing the door, each a doorway to one of
+  // Ranran's own projects: look at one and press E (or tap) and it opens on ranranli.net in a new tab
+  const SCREENS = [
+    { title: 'ABISS_bystander', sub: 'AI Generation', eyebrow: 'SCALABLE IMMERSION · GENERATED', blurb: 'An AI-generated bystander scenario, shown as a 140° magic window.', url: 'https://ranranli.net/projects/scalable-immersion-videos/generated-magic-window-bystander/', look: 'window' },
+    { title: 'ABISS_bystander', sub: '3D world', eyebrow: 'SCALABLE IMMERSION · RECONSTRUCTED', blurb: 'The same scene rebuilt as a walkable 3D world.', url: 'https://ranranli.net/projects/scalable-immersion-videos/reconstructed-3Dworld/', look: 'world' },
+    { title: 'The Pleasure Island Experiment', sub: 'Hedonism vs. sustainability', eyebrow: 'SHORT-TERM MINDSETS · BROWSER PROTOTYPE', blurb: 'One season on a fragile island: spend it as you like and see what is left.', url: 'https://ranranli.net/pleasure-island-experiment/', image: 'assets/screens/pleasure-island.jpg' },
+  ];
+  function screenTex(spec){
+    const c = document.createElement('canvas'); c.width = 1024; c.height = 576; const g = c.getContext('2d');
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+    let img = null;
+    if(spec.image){ img = new Image(); img.onload = () => { draw(); }; img.src = spec.image; }
+    const draw = () => {
+      const w = c.width, h = c.height;
+      if(img && img.complete && img.naturalWidth){
+        g.drawImage(img, 0, 0, w, h);
+        const band = g.createLinearGradient(0, h*0.55, 0, h); band.addColorStop(0, 'rgba(6,10,20,0)'); band.addColorStop(1, 'rgba(6,10,20,0.9)'); g.fillStyle = band; g.fillRect(0, 0, w, h);
+      } else {
+        // the dark look of the study pages: deep navy, a soft blue glow, and the motif of the scenario
+        const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#0d1424'); bg.addColorStop(1, '#070a14'); g.fillStyle = bg; g.fillRect(0, 0, w, h);
+        const glow = g.createRadialGradient(w*0.5, h*0.42, 0, w*0.5, h*0.42, w*0.5); glow.addColorStop(0, 'rgba(90,140,230,0.28)'); glow.addColorStop(1, 'rgba(90,140,230,0)'); g.fillStyle = glow; g.fillRect(0, 0, w, h);
+        g.strokeStyle = 'rgba(150,190,255,0.5)'; g.lineWidth = 3;
+        if(spec.look === 'window'){   // a 140° arc of a magic window, with the viewer at its centre
+          for(const r of [150, 200, 250]){ g.beginPath(); g.arc(w*0.5, h*0.82, r, Math.PI*1.11, Math.PI*1.89); g.stroke(); }
+          g.fillStyle = 'rgba(200,220,255,0.9)'; g.beginPath(); g.arc(w*0.5, h*0.82, 7, 0, Math.PI*2); g.fill();
+          for(const a of [1.11, 1.89]){ g.beginPath(); g.moveTo(w*0.5, h*0.82); g.lineTo(w*0.5 + Math.cos(Math.PI*a)*260, h*0.82 + Math.sin(Math.PI*a)*260); g.stroke(); }
+        } else {   // a grid floor in perspective, for the walkable world
+          g.strokeStyle = 'rgba(150,190,255,0.35)';
+          for(let k=-6;k<=6;k++){ g.beginPath(); g.moveTo(w*0.5 + k*26, h*0.5); g.lineTo(w*0.5 + k*150, h*0.96); g.stroke(); }
+          for(let k=0;k<7;k++){ const y = h*0.5 + Math.pow(k/6, 1.7)*h*0.46; g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+        }
+      }
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      if(spec.image){
+        // the page's own picture carries its title; only a caption in the band at the foot
+        g.fillStyle = 'rgba(160,196,255,0.95)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText(spec.eyebrow, 58, h - 92);
+        g.fillStyle = 'rgba(244,246,251,0.9)'; g.font = '600 36px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.sub, 58, h - 50);
+      } else {
+        g.fillStyle = 'rgba(160,196,255,0.95)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText(spec.eyebrow, 58, 92);
+        g.fillStyle = '#f4f6fb'; g.font = '700 72px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.title, 56, 168);
+        g.fillStyle = 'rgba(244,246,251,0.85)'; g.font = '600 38px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.sub, 58, 224);
+        g.fillStyle = 'rgba(200,214,240,0.75)'; g.font = '500 24px "DM Mono", ui-monospace, monospace'; g.fillText(spec.blurb, 58, 272);
+      }
+      g.textAlign = 'right'; g.fillStyle = 'rgba(160,196,255,0.9)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText((isTouch ? 'tap' : 'E') + ' · ranranli.net ↗', w - 52, h - 44);
+      g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 3; g.strokeRect(18, 18, w-36, h-36);
+      tex.needsUpdate = true;
+    };
+    draw();
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+    return tex;
   }
   const screenDark = new THREE.MeshStandardMaterial({color:0x1c1c1e, roughness:0.45, metalness:0.3});
   const screenMetal = new THREE.MeshStandardMaterial({color:0x4a4d52, roughness:0.4, metalness:0.7});
-  function screen(i, x, z, yaw){
+  function screen(spec, x, z, yaw){
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = yaw;
     g.add(mesh(new THREE.BoxGeometry(1.2, 0.03, 0.56), screenMetal, 0, 0.015, 0));
     for(const dx of [-0.42, 0.42]) g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 10), screenMetal, dx, 0.04, 0.2, false, false));
     g.add(mesh(new THREE.BoxGeometry(0.1, 1.95, 0.07), screenMetal, 0, 1.0, -0.03));
     g.add(mesh(new THREE.BoxGeometry(2.24, 1.34, 0.06), screenDark, 0, 1.6, 0.02));
-    const tex = screenTex(i);
-    const mat = new THREE.MeshStandardMaterial({map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.45, roughness:0.3});
+    const tex = screenTex(spec);
+    const mat = new THREE.MeshStandardMaterial({map:tex, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:0.55, roughness:0.3});
     const display = mesh(new THREE.PlaneGeometry(2.12, 1.22), mat, 0, 1.6, 0.052, false, false);
     g.add(display);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.5, 0.6), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, colorWrite:false}));
+    hit.position.set(0, 1.6, 0.1); hit.userData = {kind:'portal', title: spec.title, sub: spec.sub, url: spec.url, blurb: spec.blurb}; g.add(hit); portalHits.push(hit);
     world.add(g);
     // its footprint (the panel and the base, turned), for walking round it
     const c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw));
     let ex = 0, ez = 0;
     for(const [hw, hd] of [[1.12, 0.05], [0.6, 0.28]]){ ex = Math.max(ex, c*hw + s*hd); ez = Math.max(ez, s*hw + c*hd); }
     addBox(x - ex, x + ex, z - ez, z + ez);
-    screens.push({ group: g, display, mat });
+    screens.push({ group: g, display, mat, spec });
   }
-  screen(0, ROOM.x0 + 0.5, Z1 - 3.9, 1.3); screen(1, ROOM.x0 + 0.5, Z1 - 7.3, 1.3);
-  screen(2, ROOM.x1 - 0.5, Z1 - 3.9, -1.3); screen(3, ROOM.x1 - 0.5, Z1 - 7.3, -1.3);
+  { const cx = (ROOM.x0 + ROOM.x1)/2, zs = Z1 - 7.0;
+    screen(SCREENS[0], cx - 2.5, zs, 0.14); screen(SCREENS[1], cx, zs, 0); screen(SCREENS[2], cx + 2.5, zs, -0.14); }
   setScreen = (i, src) => {
     const s = screens[i]; if(!s) return;
     const put = (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; s.mat.map = tex; s.mat.emissiveMap = tex; s.mat.needsUpdate = true; };
@@ -1834,10 +1916,10 @@ redrawPosters([], true); updateBin(0);
 
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
-  groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, guideBalloons, M, T,
+  groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, tickPhotos, guideBalloons, M, T,
   ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setDaylight, setScreen, screens,
   setStats, FIRE, fireHit, setFire, tickFire, tickOwl, owlWorld,
-  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit, fireHit]),
+  interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit, fireHit], portalHits),
   XG, XW, Z0, Z1, H, L,
 };
 }
