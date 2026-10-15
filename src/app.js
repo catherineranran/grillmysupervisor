@@ -681,7 +681,7 @@ wishSee.addEventListener('click', () => {
 // ---------- the grill ----------
 function renderGrill() {
   const n = grillNotes.length;
-  grillCount.textContent = n === 0 ? 'Nobody has put one on yet — be the first.' : n === 1 ? 'One is on the grate so far.' : n + ' are on the grate so far' + (n > 16 ? ' (16 fit on it at a time).' : '.');
+  grillCount.textContent = n === 0 ? 'Nobody has put one on yet — be the first.' : n === 1 ? 'One is on the grate so far.' : n + ' are on the grates so far' + (n > 12 ? ' — twelve to a grate, and another grill is wheeled out whenever one fills up.' : '.');
   const who = grillNotes.slice(0, 8).map((x) => x.sig || 'someone');
   grillRecent.textContent = who.length ? 'Latest from: ' + who.join(', ') : '';
   const ro = (dataMode === 'db' && canWrite === false);

@@ -997,95 +997,117 @@ for(const z of [20, -16, -38, -60]) banner(z, 2.7, 2.5, 0.3, 0.78);
   }
 }
 
-// ---------- the grill on the terrace ----------
+// ---------- the grills on the terrace ----------
+// One kettle grill by the board, and as many more as the sausages need: every sausage lies in a single layer on a
+// grate where it can be seen (twelve to a grate), and when a grate is full the next grill is wheeled out beside
+// it along the terrace. Visitors add sausages from the board beside the first grill; the board carries the count.
 const smoke = [];
 let setGrill;
 {
-  const gg = new THREE.Group(); gg.position.set(-5.3, 0, -6.2); gg.rotation.y = 0.5; world.add(gg);
   const black = new THREE.MeshStandardMaterial({color:0x1d1c1b, roughness:0.45, metalness:0.35});
   const steel = new THREE.MeshStandardMaterial({color:0xaeb2b5, roughness:0.35, metalness:0.8});
-  const R = 0.28, Y = 0.74;
   const blackGloss = new THREE.MeshPhysicalMaterial({color:0x1d1c1b, roughness:0.35, metalness:0.2, clearcoat:0.6, clearcoatRoughness:0.25});
-  gg.add(mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, Math.PI/2, Math.PI/2), blackGloss, 0, Y, 0));
-  const rim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, 0, Y, 0); rim.rotation.x = Math.PI/2; gg.add(rim);
-  // lid, hinged open at the back
-  const hinge = new THREE.Group(); hinge.position.set(-R, Y, 0); hinge.rotation.z = 1.95; gg.add(hinge);
-  const lid = mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, 0, Math.PI/2), blackGloss, R, 0, 0); hinge.add(lid);
-  const lidRim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, R, 0, 0); lidRim.rotation.x = Math.PI/2; hinge.add(lidRim);
-  // the lid's handle (a wooden grip on two steel posts), its vent and a little thermometer
-  for(const dz of [-0.06, 0.06]) hinge.add(mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.07, 8), steel, R, R+0.03, dz));
-  const grip = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 12), new THREE.MeshStandardMaterial({color:0x6b4a2c, roughness:0.6}), R, R+0.07, 0); grip.rotation.x = Math.PI/2; hinge.add(grip);
-  hinge.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 16), steel, R + 0.12, R*0.9, 0.1, false, false));
-  for(let k=0;k<4;k++) hinge.add(mesh(new THREE.BoxGeometry(0.035, 0.002, 0.004), black, R + 0.12, R*0.9 + 0.005, 0.1 - 0.012 + k*0.008, false, false));
-  const thermo = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 20), new THREE.MeshStandardMaterial({color:0xf2efe8, roughness:0.5}), R - 0.1, R*0.93, -0.1, false, false); thermo.rotation.x = -0.3; hinge.add(thermo);
-  const thermoRim = mesh(new THREE.TorusGeometry(0.022, 0.004, 6, 24), steel, R - 0.1, R*0.93, -0.1, false, false); thermoRim.rotation.x = Math.PI/2 - 0.3; hinge.add(thermoRim);
-  // grate and coals
+  const R = 0.28, Y = 0.74;
   const emberTex = makeTex(256, 256, (g, w, h) => {
     g.fillStyle = '#1a1210'; g.fillRect(0, 0, w, h);
     for(let i=0;i<90;i++){ const x = rand()*w, y = rand()*h, r = rr(8, 26); const grd = g.createRadialGradient(x, y, 0, x, y, r); grd.addColorStop(0, `rgba(255,${rr(90, 170)|0},30,0.95)`); grd.addColorStop(0.6, 'rgba(200,60,10,0.5)'); grd.addColorStop(1, 'rgba(60,20,10,0)'); g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fill(); }
     for(let i=0;i<60;i++){ g.fillStyle = `rgba(30,22,20,${rr(0.5, 0.9)})`; g.beginPath(); g.ellipse(rand()*w, rand()*h, rr(6, 16), rr(4, 10), rand()*3, 0, Math.PI*2); g.fill(); }
   });
-  const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 40), new THREE.MeshStandardMaterial({map:emberTex, emissiveMap:emberTex, emissive:0xffffff, emissiveIntensity:1.1, roughness:1}));
-  coals.rotation.x = -Math.PI/2; coals.position.y = Y - 0.12; gg.add(coals);
-  for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 8), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; gg.add(bar); }
-  for(const x of [-0.16, 0.16]){ const cross = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.44, 8), steel, x, Y+0.0, 0); cross.rotation.x = Math.PI/2; gg.add(cross); }
-  const grateRing = mesh(new THREE.TorusGeometry(R*0.9, 0.004, 6, 48), steel, 0, Y+0.003, 0); grateRing.rotation.x = Math.PI/2; gg.add(grateRing);
-  // what's cooking: little avatar sausages — the supervisor, in cartoon, wrapped round each one. Visitors add them
-  // from the board beside the grill; up to 16 show on the grate (two layers), the board carries the full count.
+  const coalMat = new THREE.MeshStandardMaterial({map:emberTex, emissiveMap:emberTex, emissive:0xffffff, emissiveIntensity:1.1, roughness:1});
+  const gripMat = new THREE.MeshStandardMaterial({color:0x6b4a2c, roughness:0.6});
+  const thermoMat = new THREE.MeshStandardMaterial({color:0xf2efe8, roughness:0.5});
+  const patty = new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7});
+  // the sausages: little avatar sausages — the supervisor, in cartoon, wrapped round each one
   const SR = 0.033, SL = 0.10;
   const sausageSide = new THREE.MeshStandardMaterial({map:T.sausage, roughness:0.55});
   const sausageEnd = new THREE.MeshStandardMaterial({color:0x9c4a2a, roughness:0.55});
   const sideGeo = new THREE.CylinderGeometry(SR, SR, SL, 24, 1, true);
   const capGeo = new THREE.SphereGeometry(SR, 16, 10, 0, Math.PI*2, 0, Math.PI/2);
-  const slots = [];
-  for(let layer=0; layer<2; layer++) for(let row=0; row<2; row++) for(let i=0;i<4;i++){
-    const a = (-0.115 + i*0.077) * (layer ? 1 : 1), b = (row ? 0.088 : -0.088);
-    slots.push(layer ? {x:b, z:a, y:Y+SR+0.004+2*SR*0.82, yaw:Math.PI/2} : {x:a, z:b, y:Y+SR+0.004, yaw:0});
+  // twelve places on a grate, all in one layer so none hides another: seven rows across the bars, two end to end
+  // in the middle five, one in each of the outer two
+  const SLOTS = [];
+  for(const [z, n] of [[-0.216, 1], [-0.144, 2], [-0.072, 2], [0, 2], [0.072, 2], [0.144, 2], [0.216, 1]]){
+    for(let i=0;i<n;i++) SLOTS.push({ x: (i - (n-1)/2)*0.176, z, y: Y + SR + 0.004, yaw: 0 });
   }
-  const sausages = [];
-  for(const s of slots){
-    const g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.set(0, s.yaw + rr(-0.12,0.12), 0);
-    const body = new THREE.Group(); body.rotation.x = Math.PI/2; g.add(body);     // the axis along z, the wrap's middle facing up
-    body.add(mesh(sideGeo, sausageSide, 0, 0, 0));
-    const c1 = mesh(capGeo, sausageEnd, 0, SL/2, 0); body.add(c1);
-    const c2 = mesh(capGeo, sausageEnd, 0, -SL/2, 0); c2.rotation.x = Math.PI; body.add(c2);
-    g.visible = false; gg.add(g); sausages.push(g);
+  const PER_GRILL = SLOTS.length;
+  const smokeTex = (() => {
+    const sc = document.createElement('canvas'); sc.width = sc.height = 64;
+    const sg = sc.getContext('2d'); const grd = sg.createRadialGradient(32,32,2,32,32,30); grd.addColorStop(0,'rgba(235,232,228,0.9)'); grd.addColorStop(1,'rgba(235,232,228,0)');
+    sg.fillStyle = grd; sg.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(sc);
+  })();
+  const grills = [];
+  function makeGrill(x, z, yaw, withShelf){
+    const gg = new THREE.Group(); gg.position.set(x, 0, z); gg.rotation.y = yaw; world.add(gg);
+    gg.add(mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, Math.PI/2, Math.PI/2), blackGloss, 0, Y, 0));
+    const rim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, 0, Y, 0); rim.rotation.x = Math.PI/2; gg.add(rim);
+    // lid, hinged open at the back, with its wooden grip, vent and thermometer
+    const hinge = new THREE.Group(); hinge.position.set(-R, Y, 0); hinge.rotation.z = 1.95; gg.add(hinge);
+    hinge.add(mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, 0, Math.PI/2), blackGloss, R, 0, 0));
+    const lidRim = mesh(new THREE.TorusGeometry(R, 0.012, 10, 64), steel, R, 0, 0); lidRim.rotation.x = Math.PI/2; hinge.add(lidRim);
+    for(const dz of [-0.06, 0.06]) hinge.add(mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.07, 8), steel, R, R+0.03, dz));
+    const grip = mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 12), gripMat, R, R+0.07, 0); grip.rotation.x = Math.PI/2; hinge.add(grip);
+    hinge.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.008, 16), steel, R + 0.12, R*0.9, 0.1, false, false));
+    for(let k=0;k<4;k++) hinge.add(mesh(new THREE.BoxGeometry(0.035, 0.002, 0.004), black, R + 0.12, R*0.9 + 0.005, 0.1 - 0.012 + k*0.008, false, false));
+    const thermo = mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 20), thermoMat, R - 0.1, R*0.93, -0.1, false, false); thermo.rotation.x = -0.3; hinge.add(thermo);
+    const thermoRim = mesh(new THREE.TorusGeometry(0.022, 0.004, 6, 24), steel, R - 0.1, R*0.93, -0.1, false, false); thermoRim.rotation.x = Math.PI/2 - 0.3; hinge.add(thermoRim);
+    // grate and coals
+    const coals = new THREE.Mesh(new THREE.CircleGeometry(R*0.8, 40), coalMat); coals.rotation.x = -Math.PI/2; coals.position.y = Y - 0.12; gg.add(coals);
+    for(let i=-5;i<=5;i++){ const w = Math.sqrt(Math.max(0.01, R*R - (i*0.045)*(i*0.045)))*2*0.9; const bar = mesh(new THREE.CylinderGeometry(0.004, 0.004, w, 8), steel, 0, Y+0.005, i*0.045); bar.rotation.z = Math.PI/2; gg.add(bar); }
+    for(const cx of [-0.16, 0.16]){ const cross = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.44, 8), steel, cx, Y, 0); cross.rotation.x = Math.PI/2; gg.add(cross); }
+    const grateRing = mesh(new THREE.TorusGeometry(R*0.9, 0.004, 6, 48), steel, 0, Y+0.003, 0); grateRing.rotation.x = Math.PI/2; gg.add(grateRing);
+    const sausages = [];
+    for(const sl of SLOTS){
+      const g = new THREE.Group(); g.position.set(sl.x, sl.y, sl.z); g.rotation.set(0, sl.yaw + rr(-0.1, 0.1), 0);
+      const body = new THREE.Group(); body.rotation.x = Math.PI/2; g.add(body);     // the axis along z, the wrap's middle facing up
+      body.add(mesh(sideGeo, sausageSide, 0, 0, 0));
+      body.add(mesh(capGeo, sausageEnd, 0, SL/2, 0));
+      const c2 = mesh(capGeo, sausageEnd, 0, -SL/2, 0); c2.rotation.x = Math.PI; body.add(c2);
+      g.visible = false; gg.add(g); sausages.push(g);
+    }
+    // legs, wheels, ash pan
+    for(const [ax, az, wheel] of [[-0.6, 0.8, true], [-0.6, -0.8, true], [1, 0, false]]){
+      const leg = mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.56, 8), steel, ax*0.2, Y-R-0.1, az*0.2);
+      leg.rotation.z = -ax*0.22; leg.rotation.x = az*0.22; gg.add(leg);
+      if(wheel){ const wh = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 18), black, ax*0.3, 0.07, az*0.3); wh.rotation.x = Math.PI/2; gg.add(wh); }
+    }
+    gg.add(mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.04, 24), black, 0, Y-R-0.06, 0));
+    if(withShelf){   // a slatted side shelf with the tongs, a brush and a jar of mustard, on the first grill only
+      const slat = new THREE.MeshStandardMaterial({color:0x8a6a44, roughness:0.75});
+      for(const cx of [-0.195, 0.195]) gg.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16), patty, cx, Y+0.02, 0.2, false, false));
+      for(let k=0;k<4;k++) gg.add(mesh(new THREE.BoxGeometry(0.3, 0.012, 0.045), slat, 0.1, Y - 0.02, R + 0.08 + k*0.055));
+      for(const cx of [-0.04, 0.24]) gg.add(mesh(new THREE.BoxGeometry(0.012, 0.012, 0.22), steel, cx, Y - 0.03, R + 0.16));
+      for(const cx of [-0.04, 0.24]){ const brace = mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.26, 6), steel, cx, Y - 0.13, R + 0.08); brace.rotation.x = 0.6; gg.add(brace); }
+      const tongs = new THREE.Group(); tongs.position.set(0.06, Y - 0.01, R + 0.17); tongs.rotation.y = 0.4; gg.add(tongs);
+      const tongSteel = new THREE.MeshStandardMaterial({color:0x9a9ea2, roughness:0.6, metalness:0.6});
+      for(const dz of [-0.012, 0.012]) tongs.add(mesh(new THREE.BoxGeometry(0.26, 0.006, 0.012), tongSteel, 0, 0, dz, false, false));
+      tongs.add(mesh(new THREE.BoxGeometry(0.03, 0.01, 0.04), new THREE.MeshStandardMaterial({color:0x2a2a2a}), -0.11, 0, 0, false, false));
+      gg.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 16), new THREE.MeshStandardMaterial({color:0xd9a520, roughness:0.4}), 0.2, Y + 0.025, R + 0.2));
+      gg.add(mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.015, 16), new THREE.MeshStandardMaterial({color:0xe8e2d6, roughness:0.5}), 0.2, Y + 0.067, R + 0.2, false, false));
+      const brush = mesh(new THREE.CylinderGeometry(0.008, 0.01, 0.18, 8), gripMat, 0.22, Y - 0.005, R + 0.1, false, false); brush.rotation.z = Math.PI/2; brush.rotation.y = 0.3; gg.add(brush);
+    }
+    for(let i=0;i<7;i++){
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex, transparent:true, opacity:0.5, depthWrite:false}));
+      sp.userData.t = i/7; gg.add(sp); smoke.push(sp);
+    }
+    addBox(x - 0.45, x + 0.45, z - 0.45, z + 0.45);
+    grills.push({ gg, sausages });
+    return gg;
   }
+  makeGrill(-5.3, -6.2, 0.5, true);
+  // the next grills go down the terrace along the planter, a stride apart
+  const nextSpot = (k) => [-6.4, -8.3 - 1.5*(k - 1), 0.2 + rr(-0.25, 0.25)];
   setGrill = function(n){
-    for(let i=0;i<sausages.length;i++) sausages[i].visible = i < n;
+    while(grills.length*PER_GRILL < n && grills.length < 44){ const [x, z, yaw] = nextSpot(grills.length); makeGrill(x, z, yaw, false); }
+    let left = n;
+    grills.forEach((gr, gi) => {
+      const last = gi === grills.length - 1;
+      gr.sausages.forEach((sg, i) => { sg.visible = i < left; });
+      left = Math.max(0, left - PER_GRILL);
+      if(last && left > 0) gr.sausages.forEach((sg) => { sg.visible = true; });   // past 44 grills they just keep piling on the last one
+    });
     grillBoard.count = n; if(grillSign) grillSign.redraw();
   };
-  const patty = new THREE.MeshStandardMaterial({color:0x6b3f28, roughness:0.7});
-  for(const x of [-0.195, 0.195]) gg.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 16), patty, x, Y+0.02, 0));
-  // legs, wheels, ash pan
-  for(const [ax, az, wheel] of [[-0.6, 0.8, true], [-0.6, -0.8, true], [1, 0, false]]){
-    const leg = mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.56, 8), steel, ax*0.2, Y-R-0.1, az*0.2);
-    leg.rotation.z = -ax*0.22; leg.rotation.x = az*0.22; gg.add(leg);
-    if(wheel){ const wh = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 18), black, ax*0.3, 0.07, az*0.3); wh.rotation.x = Math.PI/2; gg.add(wh); }
-  }
-  gg.add(mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.04, 24), black, 0, Y-R-0.06, 0));
-  // a slatted side shelf with the tongs, a brush and a jar of mustard
-  { const slat = new THREE.MeshStandardMaterial({color:0x8a6a44, roughness:0.75});
-    for(let k=0;k<4;k++) gg.add(mesh(new THREE.BoxGeometry(0.3, 0.012, 0.045), slat, 0.1, Y - 0.02, R + 0.08 + k*0.055));
-    for(const x of [-0.04, 0.24]) gg.add(mesh(new THREE.BoxGeometry(0.012, 0.012, 0.22), steel, x, Y - 0.03, R + 0.16));
-    for(const x of [-0.04, 0.24]){ const brace = mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.26, 6), steel, x, Y - 0.13, R + 0.08); brace.rotation.x = 0.6; gg.add(brace); }
-    const tongs = new THREE.Group(); tongs.position.set(0.06, Y - 0.01, R + 0.17); tongs.rotation.y = 0.4; gg.add(tongs);
-    for(const dz of [-0.012, 0.012]){ const t = mesh(new THREE.BoxGeometry(0.26, 0.006, 0.012), steel, 0, 0, dz, false, false); tongs.add(t); }
-    tongs.add(mesh(new THREE.BoxGeometry(0.03, 0.01, 0.04), new THREE.MeshStandardMaterial({color:0x2a2a2a}), -0.11, 0, 0, false, false));
-    const jar = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 16), new THREE.MeshStandardMaterial({color:0xd9a520, roughness:0.4}), 0.2, Y + 0.025, R + 0.2); gg.add(jar);
-    gg.add(mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.015, 16), new THREE.MeshStandardMaterial({color:0xe8e2d6, roughness:0.5}), 0.2, Y + 0.067, R + 0.2, false, false));
-    const brush = mesh(new THREE.CylinderGeometry(0.008, 0.01, 0.18, 8), new THREE.MeshStandardMaterial({color:0x6b4a2c}), 0.22, Y - 0.005, R + 0.1, false, false); brush.rotation.z = Math.PI/2; brush.rotation.y = 0.3; gg.add(brush);
-  }
-  // smoke
-  const sc = document.createElement('canvas'); sc.width = sc.height = 64;
-  const sg = sc.getContext('2d'); const grd = sg.createRadialGradient(32,32,2,32,32,30); grd.addColorStop(0,'rgba(235,232,228,0.9)'); grd.addColorStop(1,'rgba(235,232,228,0)');
-  sg.fillStyle = grd; sg.fillRect(0,0,64,64);
-  const st = new THREE.CanvasTexture(sc);
-  for(let i=0;i<7;i++){
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:st, transparent:true, opacity:0.5, depthWrite:false}));
-    sp.userData.t = i/7; gg.add(sp); smoke.push(sp);
-  }
-  addBox(-5.75, -4.85, -6.65, -5.75);
 }
 
 // sandwich boards: a canvas face on an A-frame; look at one and press E (or tap) to use it
@@ -1140,7 +1162,7 @@ const grillSign = sandwichBoard(-5.0, -4.75, 0.25, 'grill', (bx) => {
   bx.fillText('Want to grill', 320, 134); bx.fillText('the supervisor?', 320, 198);
   drawAvatar(bx, 248, 300);
   bx.fillStyle = '#b5482f'; bx.font = '700 44px "Bricolage Grotesque", ui-sans-serif, sans-serif';
-  bx.fillText(n ? n + (n === 1 ? ' sausage' : ' sausages') + ' on the grill' : 'The grate is still empty', 320, 608);
+  bx.fillText(n ? n + (n === 1 ? ' sausage' : ' sausages') + (n > 12 ? ' on the grills' : ' on the grill') : 'The grate is still empty', 320, 608);
   bx.fillStyle = '#5d554d'; bx.font = '500 28px "DM Mono", ui-monospace, monospace';
   bx.fillText(isTouch ? 'tap here to add a sausage' : 'E / click here to add a sausage', 320, 676);
   bx.font = '500 24px "DM Mono", ui-monospace, monospace'; bx.fillText('every sausage is a little him', 320, 736);
