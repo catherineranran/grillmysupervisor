@@ -223,11 +223,16 @@ const floor = mesh(new THREE.PlaneGeometry(4, L), M.floor, 0, 0, ZC, false, true
 floor.rotation.x = -Math.PI/2; world.add(floor);
 // the glass doors in the window wall, each centred in a bay between two mullions (pitch 2.85 from Z0-0.4) and
 // swinging out onto the terrace: one near the start, with the steps down beside it, and two more along the hall
-const DOORS = [[22.5, 21.3], [-0.3, -1.5], [-37.3, -38.5]].map(([z0, z1]) => ({z0, z1, h: 2.3, angle: 0, target: 0, pivot: null}));
+const DOORS = [[22.5, 21.3], [-0.3, -1.5], [-37.3, -38.5]].map(([z0, z1]) => ({x: XG, z0, z1, h: 2.3, angle: 0, target: 0, pivot: null}));
 const DOOR = DOORS[1];   // the one by the steps
 const STAIR = {z0: -2.3, z1: -4.3, top: -8.0, bottom: -10.4};
+// the back room's garden door, in its left wall of glass, with its own steps down to the meadow (the room is below)
+const ROOM_X0 = -8.75;
+const SIDEDOOR = {x: ROOM_X0, z0: Z1 - 2.65, z1: Z1 - 3.85, h: 2.3, angle: 0, target: 0, pivot: null};
+const STAIR2 = {z0: Z1 - 2.5, z1: Z1 - 4.0, top: ROOM_X0, bottom: -11.2};
 // the stretches of glass wall between the doors
 const BAYS = []; { let za = Z0; for(const d of DOORS){ BAYS.push([za, d.z0]); za = d.z1; } BAYS.push([za, Z1]); }
+DOORS.push(SIDEDOOR);
 // floor grille along glass, split around the doors
 for(const [za, zb] of BAYS){
   const len = za - zb, gt = grilleTex.clone(); gt.needsUpdate = true; gt.repeat.set(1, len/0.25);
@@ -253,17 +258,17 @@ world.add(mesh(new THREE.BoxGeometry(4.4, H, 0.25), M.plaster, 0, H/2, Z0+0.12))
 // glazing
 for(const [za, zb] of BAYS) world.add(mesh(new THREE.BoxGeometry(0.24, 0.07, za-zb), M.frame, XG, 0.035, (za+zb)/2));
 world.add(mesh(new THREE.BoxGeometry(0.26, 0.16, L), M.frame, XG, H-0.08, ZC));
-function glassPane(za, zb, y0, y1){
+function glassPane(za, zb, y0, y1, x = XG){
   const g = new THREE.Mesh(new THREE.PlaneGeometry(za-zb, y1-y0), M.glass);
-  g.rotation.y = Math.PI/2; g.position.set(XG, (y0+y1)/2, (za+zb)/2); g.renderOrder = 2; world.add(g);
+  g.rotation.y = Math.PI/2; g.position.set(x, (y0+y1)/2, (za+zb)/2); g.renderOrder = 2; world.add(g);
 }
 for(const [za, zb] of BAYS) glassPane(za, zb, 0, H);
-for(const d of DOORS) glassPane(d.z0, d.z1, d.h+0.08, H);
-// each door: frame and the leaf, hinged on the far post, swinging out to the terrace
+for(const d of DOORS) glassPane(d.z0, d.z1, d.h+0.08, H, d.x);
+// each door: frame and the leaf, hinged on the far post, swinging out to the terrace (or the meadow)
 for(const D of DOORS){
-  for(const z of [D.z0, D.z1]) world.add(mesh(new THREE.BoxGeometry(0.2, D.h+0.1, 0.09), M.frame, XG, (D.h+0.1)/2, z));
-  world.add(mesh(new THREE.BoxGeometry(0.2, 0.1, D.z0-D.z1+0.09), M.frame, XG, D.h+0.04, (D.z0+D.z1)/2));
-  const pivot = new THREE.Group(); pivot.position.set(XG, 0, D.z1); world.add(pivot); D.pivot = pivot;
+  for(const z of [D.z0, D.z1]) world.add(mesh(new THREE.BoxGeometry(0.2, D.h+0.1, 0.09), M.frame, D.x, (D.h+0.1)/2, z));
+  world.add(mesh(new THREE.BoxGeometry(0.2, 0.1, D.z0-D.z1+0.09), M.frame, D.x, D.h+0.04, (D.z0+D.z1)/2));
+  const pivot = new THREE.Group(); pivot.position.set(D.x, 0, D.z1); world.add(pivot); D.pivot = pivot;
   const w = D.z0 - D.z1 - 0.1, leaf = new THREE.Group(); leaf.position.z = 0.05; pivot.add(leaf);
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(w-0.1, D.h-0.14), M.glass); pane.rotation.y = Math.PI/2; pane.position.set(0, D.h/2, w/2); pane.renderOrder = 2; leaf.add(pane);
   for(const z of [0.03, w-0.03]) leaf.add(mesh(new THREE.BoxGeometry(0.05, D.h-0.02, 0.06), M.frame, 0, D.h/2, z));
@@ -299,7 +304,8 @@ for(const [za, zb] of [[Z0+5, STAIR.z0], [STAIR.z1, Z1]]){   // the terrace ends
   const wallMat = withClouds(new THREE.MeshStandardMaterial({map:wallTex, roughness:0.95}));
   const R = SITE.rect, hgt = 1.62, yc = -1.5 + hgt/2, t = 0.3;
   const seg = (x0, x1, z0, z1) => world.add(mesh(new THREE.BoxGeometry(x1-x0, hgt, z1-z0), wallMat, (x0+x1)/2, yc, (z0+z1)/2, true, true));
-  seg(R.x0 - t, R.x0, R.z0 - t, STAIR.z1);        // glass side, in two pieces around the steps
+  seg(R.x0 - t, R.x0, R.z0 - t, STAIR2.z1);       // glass side, in three pieces around the two flights of steps
+  seg(R.x0 - t, R.x0, STAIR2.z0, STAIR.z1);
   seg(R.x0 - t, R.x0, STAIR.z0, R.z1 + t);
   seg(R.x1, R.x1 + t, R.z0 - t, R.z1 + t);        // behind the stone wall
   seg(R.x0, R.x1, R.z0 - t, R.z0);                // the two ends
@@ -1258,21 +1264,23 @@ function tickSmoke(dt){
 
 // ---------- outdoors: steps, meadow, gate, alpacas ----------
 function groundY(x, z){
-  if(x > STAIR.top) return 0;
-  if(z > STAIR.z1 && z < STAIR.z0 && x > STAIR.bottom) return -1.4 * Math.min(1, (STAIR.top - x)/(STAIR.top - STAIR.bottom));
+  for(const S of [STAIR, STAIR2]) if(z > S.z1 && z < S.z0 && x > S.bottom && x <= S.top) return -1.4 * Math.min(1, (S.top - x)/(S.top - S.bottom));
+  if(x > SITE.rect.x0) return 0;
   return -1.4;
 }
 M.step = new THREE.MeshStandardMaterial({color:0xcbc3b5, roughness:0.9});
-{
-  const n = 7, run = (STAIR.top - STAIR.bottom)/n, w = STAIR.z0 - STAIR.z1, zc = (STAIR.z0 + STAIR.z1)/2;
+function steps(S){   // a flight of seven down the platform's edge, with a cheek wall each side
+  const n = 7, run = (S.top - S.bottom)/n, w = S.z0 - S.z1, zc = (S.z0 + S.z1)/2;
   for(let k=0;k<n;k++){
-    const top = -0.2*(k+1), xa = STAIR.top - k*run, hgt = top + 1.42;
+    const top = -0.2*(k+1), xa = S.top - k*run, hgt = top + 1.42;
     world.add(mesh(new THREE.BoxGeometry(run, hgt, w), M.step, xa - run/2, -1.4 + hgt/2, zc, true, true));
   }
-  for(const z of [STAIR.z0, STAIR.z1]) world.add(mesh(new THREE.BoxGeometry(2.4, 1.42, 0.12), M.step, STAIR.top - 1.2, -0.69, z + (z===STAIR.z0 ? 0.06 : -0.06), true, true));
-  addBox(-9.1, STAIR.top, STAIR.z0, Z0+5); addBox(-9.1, STAIR.top, Z1, STAIR.z1);
-  addBox(STAIR.bottom, STAIR.top, STAIR.z0, STAIR.z0+0.15); addBox(STAIR.bottom, STAIR.top, STAIR.z1-0.15, STAIR.z1);
+  for(const z of [S.z0, S.z1]) world.add(mesh(new THREE.BoxGeometry(S.top - S.bottom, 1.42, 0.12), M.step, (S.top + S.bottom)/2, -0.69, z + (z===S.z0 ? 0.06 : -0.06), true, true));
+  world.add(mesh(new THREE.BoxGeometry(0.3, 0.24, w), M.step, S.top + 0.15, -0.15, zc, false, true));   // the top riser, so the cut in the turf never shows under the sill
+  addBox(S.bottom, S.top, S.z0, S.z0+0.15); addBox(S.bottom, S.top, S.z1-0.15, S.z1);
 }
+steps(STAIR); steps(STAIR2);
+addBox(-9.1, STAIR.top, STAIR.z0, Z0+5); addBox(-9.1, STAIR.top, Z1, STAIR.z1);   // the planter strip along the terrace
 for(const t of TREES) addBox(t.x-0.32, t.x+0.32, t.z-0.32, t.z+0.32);   // the trunks
 
 // the gate to the Ili grassland (a separate world: vibe-shepherding)
@@ -1545,7 +1553,7 @@ let fireHit, setFire, tickFire, tickOwl, owlWorld;
 // end of the hall. The left wall and the end wall are glass from floor to ceiling, looking out on the valley itself —
 // the meadow a step below, the trees along the terrace, the mountains. Three standing screens stand in an arc in
 // front of the end glass, each a door to one of Ranran's projects.
-const ROOM = { x0: -8.75, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside faces; x0 and z1 are the lines of the glass
+const ROOM = { x0: ROOM_X0, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside faces; x0 and z1 are the lines of the glass
 const FARDOOR = { x0: 0.0, x1: 1.2, h: 2.4, angle: 0, target: 0, open: false, pivot: null, box: null };
 let lockHit, setScreen, openFarDoor, tickFarDoor;
 const screens = [], portalHits = [];
@@ -1608,7 +1616,13 @@ const screens = [], portalHits = [];
       g.add(mesh(new THREE.BoxGeometry(len, 0.16, 0.22), M.frame, 0, H - 0.08, 0));
       for(let k = 1; k < bays; k++) g.add(mesh(new THREE.BoxGeometry(0.12, H, 0.14), M.frame, -len/2 + len*k/bays, H/2, 0));
     };
-    glassWall(ROOM.z0 - ROOM.z1, ROOM.x0, (ROOM.z0 + ROOM.z1)/2, Math.PI/2, 5);     // the left wall, facing into the room
+    // the left wall, in two runs either side of the garden door (its posts, header, transom and leaf come with the doors above)
+    for(const [za, zb] of [[ROOM.z0, SIDEDOOR.z0], [SIDEDOOR.z1, ROOM.z1]]){
+      glassPane(za, zb, 0, H, ROOM.x0);
+      world.add(mesh(new THREE.BoxGeometry(0.2, 0.08, za - zb), M.frame, ROOM.x0, 0.04, (za + zb)/2));
+    }
+    world.add(mesh(new THREE.BoxGeometry(0.22, 0.16, ROOM.z0 - ROOM.z1), M.frame, ROOM.x0, H - 0.08, (ROOM.z0 + ROOM.z1)/2));
+    for(let k = 1; k < 5; k++) world.add(mesh(new THREE.BoxGeometry(0.14, H, 0.12), M.frame, ROOM.x0, H/2, ROOM.z0 - (ROOM.z0 - ROOM.z1)*k/5));
     glassWall(ROOM.x1 - ROOM.x0, (ROOM.x0 + ROOM.x1)/2, ROOM.z1, 0, 5);            // across the end
     world.add(mesh(new THREE.BoxGeometry(0.18, H, 0.18), M.frame, ROOM.x0 + 0.04, H/2, ROOM.z1 + 0.04));   // the corner post
     // the platform runs on a step beyond the end glass, paved like the terrace
@@ -1817,7 +1831,7 @@ redrawPosters([], true); updateBin(0);
 
 
 return {
-  group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
+  group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, SIDEDOOR, STAIR, STAIR2, BIN, TREES, binMat,
   groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, tickPhotos, guideBalloons, M, T,
   ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setScreen, screens,
   setStats, FIRE, fireHit, setFire, tickFire, tickOwl, owlWorld,

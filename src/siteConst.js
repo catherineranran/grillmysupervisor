@@ -16,7 +16,8 @@ export const SITE = {
   sin: -FLOW.x,
   theta: Math.atan2(-FLOW.x, -FLOW.z),   // rotation.y of the gallery group
   rect: { x0: -9.1, x1: 2.6, z0: -80.9, z1: 43 },    // the platform (local); the back room takes the last 10 m
-  stair: { x0: -10.9, x1: -7.9, z0: -4.6, z1: -2.0 },  // the ground dips under the steps
+  stair: { x0: -10.9, x1: -7.9, z0: -4.6, z1: -2.0 },  // the ground dips under the steps by the first door
+  stair2: { x0: -11.7, x1: -8.65, z0: -74.3, z1: -72.2 },  // and under the steps down from the back room's garden door
   drop: 1.45,              // platform height above the meadow at its rim
   band: 16,                // metres over which the meadow blends back to the natural terrain
   fire: { x: -42, z: -26, r: 1.9 },   // the campfire by the stream (local): trampled ground, no grass, within r
@@ -37,8 +38,8 @@ export function onPlatform(lx, lz) {
   return lx > r.x0 && lx < r.x1 && lz > r.z0 && lz < r.z1;
 }
 export function onStairs(lx, lz) {
-  const s = SITE.stair;
-  return lx > s.x0 && lx < s.x1 && lz > s.z0 && lz < s.z1;
+  for (const s of [SITE.stair, SITE.stair2]) if (lx > s.x0 && lx < s.x1 && lz > s.z0 && lz < s.z1) return true;
+  return false;
 }
 
 // GLSL twin of noise.js's siteHeight, with the constants baked in
@@ -48,8 +49,11 @@ const vec2 SITE_C = vec2(${f(SITE.cx)}, ${f(SITE.cz)});
 const vec2 SITE_R = vec2(${f(SITE.cos)}, ${f(SITE.sin)});
 const vec4 SITE_RECT = vec4(${f(SITE.rect.x0)}, ${f(SITE.rect.x1)}, ${f(SITE.rect.z0)}, ${f(SITE.rect.z1)});
 const vec4 SITE_STAIR = vec4(${f(SITE.stair.x0)}, ${f(SITE.stair.x1)}, ${f(SITE.stair.z0)}, ${f(SITE.stair.z1)});
+const vec4 SITE_STAIR2 = vec4(${f(SITE.stair2.x0)}, ${f(SITE.stair2.x1)}, ${f(SITE.stair2.z0)}, ${f(SITE.stair2.z1)});
 // the grass keeps off the steps themselves (the terrain notch above is a little wider)
 const vec4 SITE_STEPS = vec4(-10.45, -7.95, -4.35, -2.25);
+const vec4 SITE_STEPS2 = vec4(-11.25, -8.7, -74.05, -72.45);
+float inRect(vec2 l, vec4 r) { return step(r.x, l.x) * step(l.x, r.y) * step(r.z, l.y) * step(l.y, r.w); }
 const vec3 SITE_FIRE = vec3(${f(SITE.fire.x)}, ${f(SITE.fire.z)}, ${f(SITE.fire.r)});
 uniform float uSiteH0;
 vec2 siteLocal(vec2 p) {
@@ -60,7 +64,7 @@ vec2 siteLocal(vec2 p) {
 float siteMask(vec2 p) {
   vec2 l = siteLocal(p);
   float onRect = step(SITE_RECT.x - 0.4, l.x) * step(l.x, SITE_RECT.y + 0.4) * step(SITE_RECT.z - 0.4, l.y) * step(l.y, SITE_RECT.w + 0.4);
-  float onStair = step(SITE_STEPS.x, l.x) * step(l.x, SITE_STEPS.y) * step(SITE_STEPS.z, l.y) * step(l.y, SITE_STEPS.w);
+  float onStair = max(inRect(l, SITE_STEPS), inRect(l, SITE_STEPS2));
   float onFire = step(length(l - SITE_FIRE.xy), SITE_FIRE.z);
   return max(max(onRect, onStair), onFire);
 }
@@ -73,7 +77,7 @@ float siteOut(vec2 p) {
 }
 float siteHeight(vec2 p, float natural) {
   vec2 l = siteLocal(p);
-  if (l.x > SITE_STAIR.x && l.x < SITE_STAIR.y && l.y > SITE_STAIR.z && l.y < SITE_STAIR.w) return uSiteH0 - ${f(SITE.drop)};
+  if (inRect(l, SITE_STAIR) > 0.5 || inRect(l, SITE_STAIR2) > 0.5) return uSiteH0 - ${f(SITE.drop)};
   float ox = max(max(SITE_RECT.x - l.x, l.x - SITE_RECT.y), 0.0);
   float oz = max(max(SITE_RECT.z - l.y, l.y - SITE_RECT.w), 0.0);
   if (ox == 0.0 && oz == 0.0) return uSiteH0 - 0.05;

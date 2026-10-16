@@ -127,11 +127,12 @@ const sound = new Soundscape(tuning);
 
 // ---------- the gallery ----------
 const G = buildGallery({ scene, maxAniso: renderer.capabilities.getMaxAnisotropy(), isTouch });
-const { posters, colliders, DOORS, STAIR, BIN, TREES, XG, XW, Z0, Z1, ROOM, FARDOOR } = G;
+const { posters, colliders, DOORS, STAIR, STAIR2, BIN, TREES, XG, XW, Z0, Z1, ROOM, FARDOOR } = G;
 { // the retaining wall around the platform keeps you on it (except down the steps), and off it from below
   const R = SITE.rect, t = 0.3;
   colliders.push({ minX: R.x1, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z1 + t });
-  colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: R.z0 - t, maxZ: STAIR.z1 });   // glass side, in two pieces around the steps
+  colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: R.z0 - t, maxZ: STAIR2.z1 });   // glass side, in three pieces around the two flights of steps
+  colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: STAIR2.z0, maxZ: STAIR.z1 });
   colliders.push({ minX: R.x0 - t, maxX: R.x0, minZ: STAIR.z0, maxZ: R.z1 + t });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z0 - t, maxZ: R.z0 });
   colliders.push({ minX: R.x0 - t, maxX: R.x1 + t, minZ: R.z1, maxZ: R.z1 + t });
@@ -902,10 +903,13 @@ function collide() {
   // the glass wall, except through a door that has swung open
   let through = null;
   for (const d of DOORS) if (d.angle < -1.1 && player.z > d.z1 + R && player.z < d.z0 - R) { through = d; break; }
+  const inRoom = player.z < ROOM.z0 && onPlatform(player.x, player.z);   // the back room's footprint (and the sill outside its garden door)
   if (through) {
-    if (Math.abs(player.x - XG) < 0.55) player.z = THREE.MathUtils.clamp(player.z, through.z1 + R, through.z0 - R);
-  } else if (player.z < ROOM.z0 && onPlatform(player.x, player.z)) {   // in the back room: its walls and the glass
-    player.x = THREE.MathUtils.clamp(player.x, ROOM.x0 + R, ROOM.x1 - R); player.z = Math.max(player.z, ROOM.z1 + R);
+    if (Math.abs(player.x - through.x) < 0.55) player.z = THREE.MathUtils.clamp(player.z, through.z1 + R, through.z0 - R);
+    if (inRoom) { player.x = Math.min(player.x, ROOM.x1 - R); player.z = Math.max(player.z, ROOM.z1 + R); }   // the room's other walls still hold
+  } else if (inRoom) {   // in the back room: its walls and the glass
+    if (player.x < ROOM.x0) player.x = Math.min(player.x, ROOM.x0 - R);   // on the sill outside the (closed) garden door
+    else { player.x = THREE.MathUtils.clamp(player.x, ROOM.x0 + R, ROOM.x1 - R); player.z = Math.max(player.z, ROOM.z1 + R); }
   } else if (player.x >= XG && onPlatform(player.x, player.z)) player.x = Math.max(player.x, XG + 0.24 + R);
   else if (onPlatform(player.x, player.z)) player.x = Math.min(player.x, XG - 0.24 - R);
   if (player.x > XG && player.x < XW && player.z > Z1) player.z = Math.min(player.z, Z0 - R);   // (the far end is the door to the room)
@@ -1066,7 +1070,7 @@ function frame() {
 
   // the glass doors open themselves when you come near
   for (const d of DOORS) {
-    const dd = Math.hypot(player.x - XG, player.z - (d.z0 + d.z1) / 2);
+    const dd = Math.hypot(player.x - d.x, player.z - (d.z0 + d.z1) / 2);
     d.target = dd < 2.6 ? -1.55 : 0;
     d.angle += THREE.MathUtils.clamp(d.target - d.angle, -2.4 * dt, 2.4 * dt);
     d.pivot.rotation.y = d.angle;
