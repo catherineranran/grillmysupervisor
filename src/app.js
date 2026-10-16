@@ -21,6 +21,9 @@ import { World } from './world.js';
 import { Flock } from './flock.js';
 import { loadLook } from './sheepModels.js';
 import { Post } from './post.js';
+import { VR_PAGE, patchShadersForDirectOutput, VRRig } from './vr.js';
+import { exposureUniform } from './config.js';
+if (VR_PAGE) patchShadersForDirectOutput();
 import { cloudUniforms } from './materials.js';
 import { loadTuning } from './tuning.js';
 import { initSheepShading } from './sheepShader.js';
@@ -53,7 +56,9 @@ function scatterMarks() {
   introMarks.innerHTML = out.join('');
 }
 scatterMarks();
-if (isTouch) {
+if (VR_PAGE) {
+  keys.innerHTML = '<dt>Enter VR</dt><dd>put the headset on, then press the button below (the headset\'s own browser, WebXR)</dd><dt>Left stick</dt><dd>walk the way you look</dd><dt>Grip</dt><dd>walk faster</dd><dt>Right stick</dt><dd>turn</dd><dt>Point</dt><dd>at a poster, a board, a screen or the locked door to see what it is; the trigger opens the locked door</dd><dt>A / X</dt><dd>change the time of day — midnight for the fireworks</dd><dt>B / Y</dt><dd>sound off and on</dd><dt>Writing</dt><dd>greetings, sausages and signatures are left on the flat site, grillmysupervisor.online</dd>';
+} else if (isTouch) {
   keys.innerHTML = '<dt>Left thumb</dt><dd>walk</dd><dt>Right thumb</dt><dd>look around</dd><dt>Tap</dt><dd>a poster to read notes, a board to sign, greet or grill him, the bin to complain</dd><dt>Posters</dt><dd>every poster, from anywhere</dd><dt>00:00</dt><dd>slide the clock to midnight and look out over the grassland</dd>';
 } else {
   keys.innerHTML = '<dt>W A S D</dt><dd>walk</dd><dt>Mouse</dt><dd>look around</dd><dt>E / click</dt><dd>read a poster, sign the birthday board, leave a greeting, grill him, or open the bin</dd><dt>P</dt><dd>all the posters, from anywhere</dd><dt>Shift</dt><dd>walk faster</dd><dt>[ ]</dt><dd>move the sun</dd><dt>00:00</dt><dd>at midnight, look out over the grassland</dd><dt>Esc</dt><dd>free the cursor</dd>';
@@ -62,7 +67,8 @@ if (isTouch) {
 // ---------- renderer, scene, lights ----------
 await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
 const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: VR_PAGE, powerPreference: 'high-performance' });
+if (VR_PAGE) { renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = exposureUniform.value; renderer.outputColorSpace = THREE.SRGBColorSpace; }
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -935,6 +941,27 @@ function collide() {
   }
 }
 
+// ---------- the headset ----------
+const CLOCK_STOPS = [540, 840, 1140, 1260, 0, 360];
+const vr = VR_PAGE ? new VRRig(renderer, scene, camera, {
+  onSessionStart() { intro.hidden = true; if (boardOpen) closeBoard(); sound.start(); if (tuning.sound.master <= 0) { tuning.sound.master = 0.8; $('mSound').innerHTML = 'Sound <b>on</b>'; } keysDown.clear(); },
+  onSessionEnd() { intro.hidden = false; },
+  collide, groundLocal,
+  interactables: () => G.interactables,
+  setHover,
+  promptFor: (obj) => {
+    const k = obj.userData.kind;
+    return k === 'poster' ? 'notes for the supervisor — leave yours on the flat site' : k === 'gate' ? 'the gate to the herding grounds (ranranli.net/vibe-shepherding)'
+      : k === 'grill' ? 'grill the supervisor — add a sausage on the flat site' : k === 'wish' ? 'the greeting board — write on the flat site'
+      : k === 'sign' ? 'the birthday board — sign on the flat site' : k === 'lock' ? 'locked — pull the trigger to open it' : k === 'fire' ? 'the campfire — toast a marshmallow on the flat site'
+      : k === 'portal' ? obj.userData.title + ' · ' + obj.userData.sub + ' — on ranranli.net' : 'the bin. Complaints go here (on the flat site)';
+  },
+  onTrigger: (obj) => { if (obj.userData.kind === 'lock') { G.openFarDoor(); const i = G.interactables.indexOf(G.lockHit); if (i >= 0) G.interactables.splice(i, 1); } },
+  cycleClock() { const cur = Math.round(clockMins), i = CLOCK_STOPS.findIndex((m) => Math.abs(m - cur) < 1); const next = i >= 0 ? CLOCK_STOPS[(i + 1) % CLOCK_STOPS.length] : (CLOCK_STOPS.find((m) => m > cur) ?? CLOCK_STOPS[0]); sunInput.value = next; setClock(next); },
+  toggleSound() { $('mSound').click(); },
+}) : null;
+if (vr) { const b = vr.button; b.removeAttribute('style'); b.id = 'enterVR'; $('enter').insertAdjacentElement('afterend', b); }
+
 // ---------- render ----------
 const post = new Post();
 function resize() {
@@ -956,7 +983,8 @@ const LEVELS = [
   { dpr: 0.8, grass: 0.28, flowers: 0.45, trees: 160 },
 ];
 const GPU_BUDGET = 11, GAP_BUDGET = 21;
-const FORCED = ['high', 'medium', 'low', 'lowest'].indexOf(new URLSearchParams(location.search).get('quality'));
+let FORCED = ['high', 'medium', 'low', 'lowest'].indexOf(new URLSearchParams(location.search).get('quality'));
+if (VR_PAGE && FORCED < 0) FORCED = /OculusBrowser|Quest/i.test(navigator.userAgent) ? 3 : 2;
 let level = FORCED >= 0 ? FORCED : isTouch ? 1 : 0;
 function applyLevel(i) {
   level = i;
@@ -1027,16 +1055,8 @@ let lastFrame = 0, first = true, ambience = 0;
 const veil = $('veil');
 
 const fireWorld = (() => { const [x, z] = toWorld(G.FIRE.x, G.FIRE.z); return { x, y: SITE.H0 + G.FIRE.y + 0.4, z }; })();
-function frame() {
-  if (window.__prof) window.__prof.frames = (window.__prof.frames || 0) + 1;   // headless test hook
-  if (sound.fire) { sound.fire.pos = fireWorld; sound.fire.level = 1; }
-  const dt = Math.min(clock.getDelta(), 0.05);
-  const time = (U.uTime.value += dt);
-  cloudUniforms.uTime.value = time;
-  sun.intensity = cur.sky.sun * Math.PI * GALLERY_SUN * (0.45 + 0.55 * dayK);
-  hemi.intensity = cur.sky.skyLight * Math.PI * GALLERY_SKY * (0.5 + 0.5 * dayK);
-
-  // walk
+// one step of walking and looking on the flat page: keys and the touch joystick move the player, the camera stands at eye height
+function desktopStep(dt) {
   let mf = 0, ms = 0;
   if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) mf += 1;
   if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) mf -= 1;
@@ -1064,9 +1084,23 @@ function frame() {
   camera.position.set(wx, SITE.H0 + player.y + EYE + bob, wz);
   camera.rotation.set(player.pitch, player.yaw + SITE.theta, 0);
   camera.updateMatrixWorld();
+  setHover((boardOpen || !intro.hidden) ? null : pick(0, 0));
+}
+
+function frame() {
+  if (window.__prof) window.__prof.frames = (window.__prof.frames || 0) + 1;   // headless test hook
+  if (sound.fire) { sound.fire.pos = fireWorld; sound.fire.level = 1; }
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const time = (U.uTime.value += dt);
+  cloudUniforms.uTime.value = time;
+  sun.intensity = cur.sky.sun * Math.PI * GALLERY_SUN * (0.45 + 0.55 * dayK);
+  hemi.intensity = cur.sky.skyLight * Math.PI * GALLERY_SKY * (0.5 + 0.5 * dayK);
+
+  const presenting = !!(vr && vr.presenting);
+  if (presenting) vr.update(dt, player); else desktopStep(dt);
+  const v = Math.hypot(player.vx, player.vz);
   projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   herdCtx.frustum.setFromProjectionMatrix(projScreen);
-  setHover((boardOpen || !intro.hidden) ? null : pick(0, 0));
 
   // the glass doors open themselves when you come near
   for (const d of DOORS) {
@@ -1118,7 +1152,8 @@ function frame() {
   sound.update(dt, { camera, walker: { speed: v }, flock: flock || { bleats: [] }, bees: butterflies });
 
   followShadow(tmp.copy(f).multiplyScalar(9).add(camera.position));
-  post.render(renderer, scene, camera, gpuTimer && tune.calibrating ? sceneTimer : null);
+  if (VR_PAGE) { renderer.toneMappingExposure = exposureUniform.value; renderer.setRenderTarget(null); renderer.render(scene, camera); }
+  else post.render(renderer, scene, camera, gpuTimer && tune.calibrating ? sceneTimer : null);
   if (sun.shadow.map && !U.uShadowOn.value) {
     U.uShadowMap.value = sun.shadow.map.texture;
     U.uShadowOn.value = 1;
@@ -1130,8 +1165,8 @@ function frame() {
     if (settleLevel(gap)) { tune.calibrating = false; veil.classList.add('gone'); }
   } else watchLevel(gap, dt);
   if (first) { first = false; if (!tune.calibrating) requestAnimationFrame(() => veil.classList.add('gone')); }
-  requestAnimationFrame(frame);
+  if (!VR_PAGE) requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
-if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors, __birds: swallows, __fw: fireworks, __toWorld: toWorld, __toLocal: toLocal });
+if (VR_PAGE) renderer.setAnimationLoop(frame); else requestAnimationFrame(frame);
+if (location.search.includes('debug')) Object.assign(window, { __p: player, __d: DOORS[1], __G: G, __cam: camera, __clock: setClock, __sound: sound, __amb: () => ambience, __scene: scene, __renderer: renderer, __bf: butterflies, __ff: fireflies, __meteors: meteors, __birds: swallows, __fw: fireworks, __toWorld: toWorld, __toLocal: toLocal, __vr: vr });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => G.redrawPosters(wallNotes, true));
