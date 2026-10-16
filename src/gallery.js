@@ -283,8 +283,9 @@ for(let z = Z0 - 0.4; z > Z1; z -= 2.85){
 
 // ---------- outside ----------
 // terrace
-paveTex.repeat.set(7.1/2.4, (L+10)/1.2);
-const terrace = mesh(new THREE.PlaneGeometry(7.1, L+10), M.pave, XG-3.55, -0.02, ZC, false, true);   // out to the retaining wall
+const TL = SITE.rect.z1 - SITE.rect.z0;
+paveTex.repeat.set(7.1/2.4, TL/1.2);
+const terrace = mesh(new THREE.PlaneGeometry(7.1, TL), M.pave, XG-3.55, -0.02, (SITE.rect.z1 + SITE.rect.z0)/2, false, true);   // out to the retaining wall, the whole length of the platform
 terrace.rotation.x = -Math.PI/2; world.add(terrace);
 // planter wall with ivy
 planterTex.repeat.set((L+10)/2.75, 1/2.75);
@@ -344,6 +345,7 @@ const TREES = [
   {x:-12.4,z:1.8,h:11,r:4.2}, {x:-13.5,z:-15,h:9.5,r:3.6}, {x:-11,z:-27,h:10.5,r:4},
   {x:-14,z:-39,h:12,r:4.4}, {x:-11.8,z:-52,h:9,r:3.5}, {x:-13,z:-64,h:11,r:4}, {x:-12,z:9,h:10,r:3.8},
   {x:-11,z:21,h:11,r:4}, {x:-13.5,z:33,h:10,r:3.8}, {x:-12,z:45,h:10.5,r:4}, {x:-13.9,z:-76,h:10,r:3.6},
+  {x:-5.5,z:-86.5,h:10.5,r:3.9}, {x:1.0,z:-88.5,h:9.5,r:3.5},   // beyond the back room's end glass
 ];
 {
   // the crowns: rounded clumps of leaves for the mass, and cards of drawn leaf clusters over them for the lace
@@ -1539,14 +1541,13 @@ let fireHit, setFire, tickFire, tickOwl, owlWorld;
 }
 
 // ---------- the room at the very back: Ranran's, behind a locked door ----------
-// Through the far door of the corridor, the full width of the platform and ten metres deep. The far wall is glass
-// from floor to ceiling and looks out on snow mountains: beyond the glass is a closed chamber painted as a
-// panorama all the way round, with snow and a few spruces in front of it for depth. Four standing projection
-// screens wait for their environments (setScreen(i, url) puts a picture on one).
-const ROOM = { x0: -8.75, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside faces; z1 is the line of the glass
-const VIEW = { z1: Z1 - 17.75, h: 7.0 };                             // the chamber beyond the glass: 7.5 m deep, so the painted peaks stand tall in the window
+// Through the far door of the corridor, the full width of the platform and ten metres deep: a glass pavilion at the
+// end of the hall. The left wall and the end wall are glass from floor to ceiling, looking out on the valley itself —
+// the meadow a step below, the trees along the terrace, the mountains. Three standing screens stand in an arc in
+// front of the end glass, each a door to one of Ranran's projects.
+const ROOM = { x0: -8.75, x1: XW, z0: Z1 - 0.245, z1: Z1 - 10.25 };   // inside faces; x0 and z1 are the lines of the glass
 const FARDOOR = { x0: 0.0, x1: 1.2, h: 2.4, angle: 0, target: 0, open: false, pivot: null, box: null };
-let lockHit, setDaylight, setScreen, openFarDoor, tickFarDoor;
+let lockHit, setScreen, openFarDoor, tickFarDoor;
 const screens = [], portalHits = [];
 {
   const OUT0 = -9.1, OUT1 = 2.35, endZ = Z1 - 0.12;
@@ -1596,15 +1597,24 @@ const screens = [], portalHits = [];
   const rs = mesh(new THREE.PlaneGeometry(ROOM.z0 - ROOM.z1, H), withClouds(new THREE.MeshStandardMaterial({map:roomStone, roughness:0.92})), XW - 0.005, H/2, (ROOM.z0 + ROOM.z1)/2, false, true);
   rs.rotation.y = -Math.PI/2; world.add(rs);
   const roomLen = Z1 + 0.005 - ROOM.z1, roomZc = (Z1 + 0.005 + ROOM.z1)/2;
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x0 - OUT0, H + 0.4, roomLen), M.plaster, (OUT0 + ROOM.x0)/2, (H + 0.4)/2, roomZc));
-  world.add(mesh(new THREE.BoxGeometry(OUT1 - XW, H + 0.4, roomLen), M.plaster, (XW + OUT1)/2, (H + 0.4)/2, roomZc));
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, 0.4, (Z1 - 0.2) - ROOM.z1), M.ceiling, (ROOM.x0 + ROOM.x1)/2, H + 0.2, ((Z1 - 0.2) + ROOM.z1)/2));
-  // the wall of glass
-  const gw = ROOM.x1 - ROOM.x0, gxc = (ROOM.x0 + ROOM.x1)/2;
-  const pane = new THREE.Mesh(new THREE.PlaneGeometry(gw, H), M.glass); pane.position.set(gxc, H/2, ROOM.z1); pane.renderOrder = 2; world.add(pane);
-  world.add(mesh(new THREE.BoxGeometry(gw, 0.08, 0.2), M.frame, gxc, 0.04, ROOM.z1));
-  world.add(mesh(new THREE.BoxGeometry(gw, 0.16, 0.22), M.frame, gxc, H - 0.08, ROOM.z1));
-  for(let k = 1; k < 5; k++) world.add(mesh(new THREE.BoxGeometry(0.12, H, 0.14), M.frame, ROOM.x0 + gw*k/5, H/2, ROOM.z1));
+  world.add(mesh(new THREE.BoxGeometry(OUT1 - XW, H + 0.4, roomLen), M.plaster, (XW + OUT1)/2, (H + 0.4)/2, roomZc));   // the right wall, behind the stone
+  world.add(mesh(new THREE.BoxGeometry(OUT1 - ROOM.x0, 0.4, (Z1 - 0.2) - ROOM.z1), M.ceiling, (ROOM.x0 + OUT1)/2, H + 0.2, ((Z1 - 0.2) + ROOM.z1)/2));   // the roof, out over the glass
+  // the two walls of glass, left and across the end, meeting at a corner post; the valley is right there behind them
+  {
+    const glassWall = (len, cx, cz, yaw, bays) => {
+      const g = new THREE.Group(); g.position.set(cx, 0, cz); g.rotation.y = yaw; world.add(g);
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(len, H), M.glass); pane.position.set(0, H/2, 0); pane.renderOrder = 2; g.add(pane);
+      g.add(mesh(new THREE.BoxGeometry(len, 0.08, 0.2), M.frame, 0, 0.04, 0));
+      g.add(mesh(new THREE.BoxGeometry(len, 0.16, 0.22), M.frame, 0, H - 0.08, 0));
+      for(let k = 1; k < bays; k++) g.add(mesh(new THREE.BoxGeometry(0.12, H, 0.14), M.frame, -len/2 + len*k/bays, H/2, 0));
+    };
+    glassWall(ROOM.z0 - ROOM.z1, ROOM.x0, (ROOM.z0 + ROOM.z1)/2, Math.PI/2, 5);     // the left wall, facing into the room
+    glassWall(ROOM.x1 - ROOM.x0, (ROOM.x0 + ROOM.x1)/2, ROOM.z1, 0, 5);            // across the end
+    world.add(mesh(new THREE.BoxGeometry(0.18, H, 0.18), M.frame, ROOM.x0 + 0.04, H/2, ROOM.z1 + 0.04));   // the corner post
+    // the platform runs on a step beyond the end glass, paved like the terrace
+    const p = mesh(new THREE.PlaneGeometry(OUT1 - OUT0, SITE.rect.z0 < ROOM.z1 ? ROOM.z1 - SITE.rect.z0 : 0.6), M.pave, (OUT0 + OUT1)/2, -0.02, (ROOM.z1 + SITE.rect.z0)/2, false, true);
+    p.rotation.x = -Math.PI/2; world.add(p);
+  }
   // a rug in the middle of the room
   const rugTex = makeTex(512, 384, (g, w, h) => {
     g.fillStyle = '#7a3b35'; g.fillRect(0, 0, w, h);
@@ -1621,8 +1631,8 @@ const screens = [], portalHits = [];
   // three standing screens in a row across the middle of the room, facing the door, each a doorway to one of
   // Ranran's own projects: look at one and press E (or tap) and it opens on ranranli.net in a new tab
   const SCREENS = [
-    { title: 'ABISS_bystander', sub: 'AI Generation', eyebrow: 'SCALABLE IMMERSION · GENERATED', blurb: 'An AI-generated bystander scenario, shown as a 140° magic window.', url: 'https://ranranli.net/projects/scalable-immersion-videos/generated-magic-window-bystander/', look: 'window' },
-    { title: 'ABISS_bystander', sub: '3D world', eyebrow: 'SCALABLE IMMERSION · RECONSTRUCTED', blurb: 'The same scene rebuilt as a walkable 3D world.', url: 'https://ranranli.net/projects/scalable-immersion-videos/reconstructed-3Dworld/', look: 'world' },
+    { title: 'ABISS_bystander', sub: 'AI Generation', blurb: 'An AI-generated bystander scenario, shown as a 140° magic window.', url: 'https://ranranli.net/projects/scalable-immersion-videos/generated-magic-window-bystander/', image: 'assets/screens/abiss-generated.jpg', label: true },
+    { title: 'ABISS_bystander', sub: '3D world', blurb: 'The same scene rebuilt as a walkable 3D world.', url: 'https://ranranli.net/projects/scalable-immersion-videos/reconstructed-3Dworld/', image: 'assets/screens/abiss-3dworld.jpg', label: true },
     { title: 'The Pleasure Island Experiment', sub: 'Hedonism vs. sustainability', eyebrow: 'SHORT-TERM MINDSETS · BROWSER PROTOTYPE', blurb: 'One season on a fragile island: spend it as you like and see what is left.', url: 'https://ranranli.net/pleasure-island-experiment/', image: 'assets/screens/pleasure-island.jpg' },
   ];
   function screenTex(spec){
@@ -1634,7 +1644,9 @@ const screens = [], portalHits = [];
       const w = c.width, h = c.height;
       if(img && img.complete && img.naturalWidth){
         g.drawImage(img, 0, 0, w, h);
-        const band = g.createLinearGradient(0, h*0.55, 0, h); band.addColorStop(0, 'rgba(6,10,20,0)'); band.addColorStop(1, 'rgba(6,10,20,0.9)'); g.fillStyle = band; g.fillRect(0, 0, w, h);
+        if(!spec.label){ const band = g.createLinearGradient(0, h*0.55, 0, h); band.addColorStop(0, 'rgba(6,10,20,0)'); band.addColorStop(1, 'rgba(6,10,20,0.9)'); g.fillStyle = band; g.fillRect(0, 0, w, h); }
+      } else if(spec.label){
+        g.fillStyle = '#0b1120'; g.fillRect(0, 0, w, h);   // while the picture loads
       } else {
         // the dark look of the study pages: deep navy, a soft blue glow, and the motif of the scenario
         const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#0d1424'); bg.addColorStop(1, '#070a14'); g.fillStyle = bg; g.fillRect(0, 0, w, h);
@@ -1651,7 +1663,17 @@ const screens = [], portalHits = [];
         }
       }
       g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-      if(spec.image){
+      if(spec.label){
+        // a preview card: the picture, and just the name as a label at the upper right
+        g.font = '600 34px "Bricolage Grotesque", ui-sans-serif, sans-serif'; const w1 = g.measureText(spec.title).width;
+        g.font = '500 34px "Bricolage Grotesque", ui-sans-serif, sans-serif'; const w2 = g.measureText(' · ' + spec.sub).width;
+        const pw = w1 + w2 + 48, ph = 60, px = w - 36 - pw, py = 30;
+        g.fillStyle = 'rgba(8,12,24,0.74)'; g.beginPath(); g.roundRect(px, py, pw, ph, 12); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,0.28)'; g.lineWidth = 1.5; g.stroke();
+        g.textBaseline = 'middle'; g.fillStyle = '#f4f6fb'; g.font = '600 34px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.title, px + 24, py + ph/2 + 1);
+        g.fillStyle = 'rgba(200,214,240,0.95)'; g.font = '500 34px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(' · ' + spec.sub, px + 24 + w1, py + ph/2 + 1);
+        g.textBaseline = 'alphabetic';
+      } else if(spec.image){
         // the page's own picture carries its title; only a caption in the band at the foot
         g.fillStyle = 'rgba(160,196,255,0.95)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText(spec.eyebrow, 58, h - 92);
         g.fillStyle = 'rgba(244,246,251,0.9)'; g.font = '600 36px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.sub, 58, h - 50);
@@ -1661,8 +1683,10 @@ const screens = [], portalHits = [];
         g.fillStyle = 'rgba(244,246,251,0.85)'; g.font = '600 38px "Bricolage Grotesque", ui-sans-serif, sans-serif'; g.fillText(spec.sub, 58, 224);
         g.fillStyle = 'rgba(200,214,240,0.75)'; g.font = '500 24px "DM Mono", ui-monospace, monospace'; g.fillText(spec.blurb, 58, 272);
       }
-      g.textAlign = 'right'; g.fillStyle = 'rgba(160,196,255,0.9)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText((isTouch ? 'tap' : 'E') + ' · ranranli.net ↗', w - 52, h - 44);
-      g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 3; g.strokeRect(18, 18, w-36, h-36);
+      if(!spec.label){
+        g.textAlign = 'right'; g.fillStyle = 'rgba(160,196,255,0.9)'; g.font = '500 22px "DM Mono", ui-monospace, monospace'; g.fillText((isTouch ? 'tap' : 'E') + ' · ranranli.net ↗', w - 52, h - 44);
+        g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 3; g.strokeRect(18, 18, w-36, h-36);
+      }
       tex.needsUpdate = true;
     };
     draw();
@@ -1691,144 +1715,22 @@ const screens = [], portalHits = [];
     addBox(x - ex, x + ex, z - ez, z + ez);
     screens.push({ group: g, display, mat, spec });
   }
-  { const cx = (ROOM.x0 + ROOM.x1)/2, zs = Z1 - 7.0;
-    screen(SCREENS[0], cx - 2.5, zs, 0.14); screen(SCREENS[1], cx, zs, 0); screen(SCREENS[2], cx + 2.5, zs, -0.14); }
+  { // on an arc round the spot just inside the door, each turned to face it
+    const cx = (ROOM.x0 + ROOM.x1)/2, fz = Z1 - 2.6, R = 4.6, spread = 0.56;
+    for(const [spec, a] of [[SCREENS[0], spread], [SCREENS[1], 0], [SCREENS[2], -spread]]) screen(spec, cx - Math.sin(a)*R, fz - Math.cos(a)*R, a);
+  }
   setScreen = (i, src) => {
     const s = screens[i]; if(!s) return;
     const put = (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso; s.mat.map = tex; s.mat.emissiveMap = tex; s.mat.needsUpdate = true; };
     if(src && src.isTexture) put(src); else texLoader.load(src, put);
   };
 
-  // the view: the chamber beyond the glass — snow underfoot, a few spruces, and the painted mountains all round
-  const shellH = VIEW.h + 0.4, viewLen = ROOM.z1 - VIEW.z1, viewZc = (ROOM.z1 + VIEW.z1)/2;
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x0 - OUT0, shellH, viewLen + 0.35), M.plaster, (OUT0 + ROOM.x0)/2, shellH/2, viewZc - 0.175, false, false));
-  world.add(mesh(new THREE.BoxGeometry(OUT1 - XW, shellH, viewLen + 0.35), M.plaster, (XW + OUT1)/2, shellH/2, viewZc - 0.175, false, false));
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, shellH, 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, shellH/2, VIEW.z1 - 0.175, false, false));
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, shellH - H, 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, (shellH + H)/2, ROOM.z1 - 0.175, false, false));
-  world.add(mesh(new THREE.BoxGeometry(ROOM.x1 - ROOM.x0, 0.4, viewLen - 0.35), M.plaster, (ROOM.x0 + ROOM.x1)/2, VIEW.h + 0.2, (ROOM.z1 - 0.35 + VIEW.z1)/2, false, false));
-  // the annex is clad in the corridor's sandstone on the outside, so it reads as a solid block beside the glass hall
+  // the room's right side is clad in the corridor's sandstone on the outside, like the hall's
   {
-    const clad = (len, hgt, x, y, z, yaw) => {
-      const t = stoneTex.clone(); t.needsUpdate = true; t.repeat.set(len/2.75, hgt/2.75);
-      const m = mesh(new THREE.PlaneGeometry(len, hgt), withClouds(new THREE.MeshStandardMaterial({map:t, roughness:0.92})), x, y, z, false, true); m.rotation.y = yaw; world.add(m);
-    };
-    const zTop = Z1 + 0.005, zMid = ROOM.z1, zEnd = VIEW.z1 - 0.35;
-    clad(zTop - zMid, H + 0.4, OUT0 - 0.006, (H + 0.4)/2, (zTop + zMid)/2, -Math.PI/2);
-    clad(zMid - zEnd, shellH, OUT0 - 0.006, shellH/2, (zMid + zEnd)/2, -Math.PI/2);
-    clad(zTop - zMid, H + 0.4, OUT1 + 0.006, (H + 0.4)/2, (zTop + zMid)/2, Math.PI/2);
-    clad(zMid - zEnd, shellH, OUT1 + 0.006, shellH/2, (zMid + zEnd)/2, Math.PI/2);
-    clad(OUT1 - OUT0, shellH, (OUT0 + OUT1)/2, shellH/2, zEnd - 0.006, Math.PI);
+    const t = stoneTex.clone(); t.needsUpdate = true; t.repeat.set((Z1 + 0.005 - ROOM.z1)/2.75, (H + 0.4)/2.75);
+    const m = mesh(new THREE.PlaneGeometry(Z1 + 0.005 - ROOM.z1, H + 0.4), withClouds(new THREE.MeshStandardMaterial({map:t, roughness:0.92})), OUT1 + 0.006, (H + 0.4)/2, (Z1 + 0.005 + ROOM.z1)/2, false, true);
+    m.rotation.y = Math.PI/2; world.add(m);
   }
-  const snowMat = withClouds(new THREE.MeshStandardMaterial({color:0xefebf2, roughness:0.93}));
-  const snow = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, viewLen), snowMat, (ROOM.x0 + ROOM.x1)/2, 0.005, viewZc, false, true);
-  snow.rotation.x = -Math.PI/2; world.add(snow);
-  for(let i=0;i<9;i++){   // gentle drifts, kept inside the walls
-    const r = rr(0.9, 2.2), rz = r*rr(0.7, 1.5);
-    const m = mesh(new THREE.SphereGeometry(1, 16, 10), snowMat, rr(ROOM.x0 + r, ROOM.x1 - r), -r*0.3, rr(VIEW.z1 + rz, ROOM.z1 - rz - 0.3), false, true);
-    m.scale.set(r, r*0.38, rz); world.add(m);
-  }
-  const spruceMat = new THREE.MeshStandardMaterial({color:0x1f3a2f, roughness:0.9, flatShading:true});
-  function snowSpruce(x, z, h){
-    const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rand()*6.28;
-    g.add(mesh(new THREE.CylinderGeometry(0.05*h/4, 0.08*h/4, h*0.3, 8), M.bark, 0, h*0.15, 0));
-    for(let k=0;k<4;k++){
-      const y0 = h*(0.18 + 0.19*k), rad = h*0.24*(1 - 0.21*k), hh = h*0.34;
-      g.add(mesh(new THREE.ConeGeometry(rad, hh, 9), spruceMat, 0, y0 + hh/2, 0));
-      g.add(mesh(new THREE.ConeGeometry(rad*0.97, hh*0.28, 9), snowMat, 0, y0 + hh*0.14 + 0.02, 0));
-    }
-    world.add(g);
-  }
-  snowSpruce(ROOM.x0 + 1.1, VIEW.z1 + 2.4, 5.2); snowSpruce(ROOM.x0 + 2.6, VIEW.z1 + 0.9, 4.1); snowSpruce(ROOM.x0 + 0.9, ROOM.z1 - 2.0, 3.0);
-  snowSpruce(ROOM.x1 - 1.0, VIEW.z1 + 3.2, 4.6); snowSpruce(ROOM.x1 - 2.4, VIEW.z1 + 1.1, 3.4); snowSpruce(ROOM.x1 - 0.9, ROOM.z1 - 2.4, 2.6);
-  // the panorama, painted once and wrapped round the three walls of the chamber
-  const panoTex = makeTex(4096, 1024, drawPanorama); panoTex.wrapS = panoTex.wrapT = THREE.ClampToEdgeWrapping;
-  const panoMat = new THREE.MeshBasicMaterial({map:panoTex});
-  const P = viewLen*2 + (ROOM.x1 - ROOM.x0);
-  function backdrop(len, u0, x, z, yaw){
-    const geo = new THREE.PlaneGeometry(len, VIEW.h); const uv = geo.attributes.uv;
-    for(let i=0;i<uv.count;i++) uv.setX(i, u0 + uv.getX(i)*len/P);
-    const m = mesh(geo, panoMat, x, VIEW.h/2, z, false, false); m.rotation.y = yaw; world.add(m);
-  }
-  backdrop(viewLen, 0, ROOM.x0 + 0.01, viewZc, Math.PI/2);
-  backdrop(ROOM.x1 - ROOM.x0, viewLen/P, (ROOM.x0 + ROOM.x1)/2, VIEW.z1 + 0.01, 0);
-  backdrop(viewLen, (viewLen + ROOM.x1 - ROOM.x0)/P, ROOM.x1 - 0.01, viewZc, -Math.PI/2);
-  const skyTop = new THREE.MeshBasicMaterial({color:0xa39ed0});   // the top of the painted sky
-  const lid = mesh(new THREE.PlaneGeometry(ROOM.x1 - ROOM.x0, viewLen), skyTop, (ROOM.x0 + ROOM.x1)/2, VIEW.h - 0.01, viewZc, false, false);
-  lid.rotation.x = Math.PI/2; world.add(lid);
-  const dayCol = new THREE.Color(1, 1, 1), nightCol = new THREE.Color(0.15, 0.18, 0.32), lidDay = new THREE.Color(0xa39ed0), lidNight = lidDay.clone().multiply(nightCol);
-  setDaylight = (k) => { panoMat.color.copy(nightCol).lerp(dayCol, k); skyTop.color.copy(lidNight).lerp(lidDay, k); };
-}
-function drawPanorama(g, W, H){
-  // Sunset over high snow mountains: a peach-and-lavender sky with the light coming from the left, a tall
-  // twin-summit massif in the middle of the back wall, purple ranges behind it, lavender shadows on the snow.
-  const horizon = H*0.778;   // eye level, 1.6 m up the wall
-  const sky = g.createLinearGradient(0, 0, 0, horizon);
-  sky.addColorStop(0, '#a39ed0'); sky.addColorStop(0.38, '#c9b4d6'); sky.addColorStop(0.72, '#eed0c8'); sky.addColorStop(1, '#f8e2c4');
-  g.fillStyle = sky; g.fillRect(0, 0, W, H);
-  // the low sun, off to the left: a warm glow that fades across the sky
-  const warm = g.createLinearGradient(0.2*W, 0, 0.62*W, 0); warm.addColorStop(0, 'rgba(255,214,150,0.6)'); warm.addColorStop(1, 'rgba(255,214,150,0)');
-  g.fillStyle = warm; g.fillRect(0, 0, W, horizon);
-  const sun = g.createRadialGradient(0.34*W, horizon*0.46, 0, 0.34*W, horizon*0.46, 0.2*W); sun.addColorStop(0, 'rgba(255,236,190,0.75)'); sun.addColorStop(0.5, 'rgba(255,220,170,0.25)'); sun.addColorStop(1, 'rgba(255,220,170,0)');
-  g.fillStyle = sun; g.fillRect(0, 0, W, horizon);
-  for(let i=0;i<30;i++){   // wisps of cloud, pink and lilac
-    const cx = rand()*W, cy = horizon*rr(0.05, 0.6), cw = rr(0.1, 0.32)*W, ch = rr(0.005, 0.016)*H, lilac = rand() < 0.35;
-    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, cw/2);
-    cg.addColorStop(0, lilac ? 'rgba(190,172,210,0.35)' : 'rgba(255,240,242,0.55)'); cg.addColorStop(1, lilac ? 'rgba(190,172,210,0)' : 'rgba(255,240,242,0)');
-    g.save(); g.translate(cx, cy); g.rotate(rr(-0.04, 0.04)); g.scale(1, ch/cw); g.fillStyle = cg; g.beginPath(); g.arc(0, 0, cw/2, 0, Math.PI*2); g.fill(); g.restore();
-  }
-  const hex = (s) => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
-  const mix = (a, b, t) => `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`;
-  function makeRidge(np, w, jag, fixed = []){
-    const peaks = fixed.slice(); for(let i=0;i<np;i++) peaks.push({x: rand(), h: rr(0.3, 0.75), w: w*rr(0.6, 1.5), s: rr(0.7, 1.6)});
-    const jags = []; for(let i=0;i<4;i++) jags.push({f: rr(40, 170), p: rand()*6, a: jag*rr(0.4, 1)/(i+1)});
-    return (u) => { let y = 0; for(const p of peaks){ const d = Math.abs(u - p.x)/p.w; if(d < 1) y = Math.max(y, p.h*Math.pow(1 - d, p.s)); } for(const j of jags) y += j.a*Math.abs(Math.sin(u*j.f + j.p)); return y; };
-  }
-  // the massif stands in the middle of the back wall (u = 0.5), with its twin summit and shoulders
-  const massif = [{x: 0.5, h: 1, w: 0.11, s: 1.5}, {x: 0.472, h: 0.93, w: 0.06, s: 1.3}, {x: 0.6, h: 0.72, w: 0.085, s: 1.4}, {x: 0.395, h: 0.64, w: 0.08, s: 1.3}];
-  const ranges = [
-    {base: horizon - 0.005*H, amp: 0.52*H, np: 8, w: 0.07, jag: 0.05, lit: '#ece2ef', shade: '#b5aed2', rockLit: '#a79fc6', rockShade: '#8781ad', snowLine: horizon - 0.16*H, haze: 0.36},
-    {base: horizon + 0.005*H, amp: 0.72*H, np: 7, w: 0.06, jag: 0.06, fixed: massif, lit: '#fbeee4', shade: '#a9a7cc', rockLit: '#6b6d8a', rockShade: '#3a3d52', snowLine: horizon - 0.06*H, haze: 0.12},
-    {base: horizon + 0.03*H, amp: 0.26*H, np: 12, w: 0.04, jag: 0.07, lit: '#f4e9e6', shade: '#9c9bc0', rockLit: '#555a72', rockShade: '#2d3143', snowLine: horizon, haze: 0.04, trees: true},
-  ];
-  for(const R of ranges){
-    const ridge = makeRidge(R.np, R.w, R.jag, R.fixed), step = 3, lit = hex(R.lit), shade = hex(R.shade), rl = hex(R.rockLit), rs = hex(R.rockShade);
-    const path = new Path2D(); path.moveTo(0, H);
-    for(let x = 0; x <= W; x += step){
-      const u = x/W, h = ridge(u), y = R.base - R.amp*h, h2 = ridge((x + step)/W);
-      const slope = R.amp*(h2 - h)/step, light = Math.max(0, Math.min(1, 0.5 - slope*1.4));   // lit from the left
-      const steep = Math.min(1, Math.abs(slope)*1.5);
-      path.lineTo(x, y);
-      g.fillStyle = mix(rs, rl, light); g.fillRect(x, y, step, H - y);
-      // snow everywhere above the (ragged) snow line; on the steep faces the rock shows through in dark bands below the crest
-      const ragged = 0.5 + 0.5*Math.sin(u*73 + 1.3)*Math.sin(u*31 + 0.4), rag2 = 0.5 + 0.5*Math.sin(u*157 + 2.1)*Math.sin(u*49 + 0.7);
-      const snowBottom = R.snowLine + R.amp*0.08*ragged;
-      if(snowBottom > y){ g.fillStyle = mix(shade, lit, light); g.fillRect(x, y, step, snowBottom - y); }
-      if(steep > 0.3){ const top = y + R.amp*(0.02 + 0.04*rag2), len = R.amp*(0.05 + 0.4*(steep - 0.3))*(0.4 + 0.6*rag2); g.fillStyle = mix(rs, rl, light*0.8); g.fillRect(x, top, step, Math.min(len, snowBottom - top)); }
-    }
-    path.lineTo(W, H); path.closePath();
-    // snow streaking down the rock, then haze over the whole range
-    g.fillStyle = 'rgba(250,240,236,0.5)';
-    for(let i=0;i<W/6;i++){ const x = rand()*W, y = R.base - R.amp*ridge(x/W); const len = rr(0.02, 0.08)*R.amp; g.fillRect(x, y + rr(0.05, 0.3)*R.amp, 2, len); }
-    g.fillStyle = `rgba(214,196,222,${R.haze})`; g.fill(path);
-    if(R.trees){
-      for(let i=0;i<420;i++){
-        const x = rand()*W, yb = R.base + rr(-0.002, 0.03)*H, th = rr(8, 26)*(0.7 + 0.3*rand()), tw = th*rr(0.3, 0.45);
-        g.fillStyle = rand() < 0.5 ? '#262b3b' : '#33384c'; g.beginPath(); g.moveTo(x, yb - th); g.lineTo(x + tw, yb); g.lineTo(x - tw, yb); g.closePath(); g.fill();
-        g.fillStyle = 'rgba(244,236,236,0.8)'; g.beginPath(); g.moveTo(x, yb - th); g.lineTo(x + tw*0.3, yb - th*0.62); g.lineTo(x - tw*0.3, yb - th*0.62); g.closePath(); g.fill();
-      }
-    }
-  }
-  // the snowfield in front, in the evening's lavender, with long soft shadows, down to the colour of the snow underfoot
-  const field = g.createLinearGradient(0, horizon + 0.02*H, 0, H); field.addColorStop(0, '#e6dfeb'); field.addColorStop(1, '#efe9ef');
-  g.fillStyle = field; g.fillRect(0, horizon + 0.03*H, W, H);
-  for(let i=0;i<40;i++){
-    const cx = rand()*W, cy = horizon + 0.03*H + rand()*(H - horizon - 0.03*H), rw = rr(0.03, 0.12)*W, rh = rr(0.004, 0.012)*H;
-    const sg = g.createRadialGradient(cx, cy, 0, cx, cy, rw); sg.addColorStop(0, 'rgba(150,145,190,0.3)'); sg.addColorStop(1, 'rgba(150,145,190,0)');
-    g.save(); g.translate(cx, cy); g.scale(1, rh/rw); g.translate(-cx, -cy); g.fillStyle = sg; g.beginPath(); g.arc(cx, cy, rw, 0, Math.PI*2); g.fill(); g.restore();
-  }
-  // aerial perspective: a breath of pink haze along the horizon
-  const air = g.createLinearGradient(0, horizon - 0.14*H, 0, horizon + 0.02*H); air.addColorStop(0, 'rgba(240,216,220,0)'); air.addColorStop(1, 'rgba(240,216,220,0.4)');
-  g.fillStyle = air; g.fillRect(0, horizon - 0.14*H, W, 0.16*H);
 }
 
 
@@ -1917,7 +1819,7 @@ redrawPosters([], true); updateBin(0);
 return {
   group: g, colliders, posters, binHit, gateHit, lampLights, doorPivot, DOOR, DOORS, STAIR, BIN, TREES, binMat,
   groundY, redrawPosters, updateBin, setGrill, setWishes, setSignatures, signLook, SIGN_FONTS, SIGN_COLORS, tickSmoke, tickBalloons, tickPhotos, guideBalloons, M, T,
-  ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setDaylight, setScreen, screens,
+  ROOM, FARDOOR, lockHit, openFarDoor, tickFarDoor, setScreen, screens,
   setStats, FIRE, fireHit, setFire, tickFire, tickOwl, owlWorld,
   interactables: posters.map(p => p.mesh).concat([binHit, gateHit, grillHit, wishHit, signHit, lockHit, fireHit], portalHits),
   XG, XW, Z0, Z1, H, L,

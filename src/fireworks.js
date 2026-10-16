@@ -8,7 +8,7 @@ import { toWorld, SITE } from './siteConst.js';
 
 const MAX = 9000;
 const GRAV = 3.2;        // fireworks fall slowly; it reads better than real gravity at this scale
-const TEXT = 'Happy birthday!';
+const MESSAGES = ['Happy birthday JL!', 'Cheers to your future self! 🥂', 'genius Ranran & MAXLab (Oct 19, 2026)'];
 
 const vert = /* glsl */ `
 attribute vec3 aColor;
@@ -42,26 +42,34 @@ const PALETTE = [
 ];
 const WORD_COLORS = [[1.0, 0.82, 0.3], [1.0, 0.5, 0.65], [0.95, 0.95, 1.0]];
 
-// the letters, sampled once from a canvas: points in a 0..1 box, aspect kept, so a burst can lay them out in the sky
-function sampleText() {
-  const c = document.createElement('canvas'); c.width = 1024; c.height = 192;
+// the letters of one message, sampled once from a canvas: points in a 0..1 box, with the aspect and the width the
+// message should take in the sky (letters about five metres tall, unless the line would get too wide for the view)
+function sampleText(text) {
+  const c = document.createElement('canvas'); c.height = 192;
   const g = c.getContext('2d');
+  const font = '700 128px "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif';
+  g.font = font; c.width = Math.ceil(g.measureText(text).width) + 120;
   g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '700 128px "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif';
-  g.fillText(TEXT, c.width / 2, c.height / 2 + 6);
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = font;
+  g.fillText(text, c.width / 2, c.height / 2 + 6);
   const d = g.getImageData(0, 0, c.width, c.height).data;
-  const pts = [];
+  let pts = [];
   for (let y = 2; y < c.height; y += 5) for (let x = 2; x < c.width; x += 5) {
-    if (d[(y * c.width + x) * 4] > 128) pts.push([x / c.width, y / c.height, x]);
+    const k = (y * c.width + x) * 4;
+    if (Math.max(d[k], d[k + 1], d[k + 2]) > 110) pts.push([x / c.width, y / c.height, x]);
   }
+  // a long line gets thinned, so the sparks stay within the show's budget
+  if (pts.length > 2600) { for (let i = pts.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [pts[i], pts[j]] = [pts[j], pts[i]]; } pts = pts.slice(0, 2600); }
   // which word each point belongs to, by the gaps between letters' x-ranges (for the colours)
-  const words = TEXT.split(' ');
+  const words = text.split(' ');
   const widths = words.map((w) => g.measureText(w).width), space = g.measureText(' ').width;
   const total = widths.reduce((a, b) => a + b, 0) + space * (words.length - 1);
   let x0 = c.width / 2 - total / 2; const spans = [];
   widths.forEach((w) => { spans.push([x0, x0 + w]); x0 += w + space; });
-  return { pts: pts.map(([u, v, px]) => ({ u, v, w: Math.max(0, spans.findIndex((s) => px <= s[1] + space / 2)) })), aspect: c.width / c.height };
+  const aspect = c.width / c.height;
+  let H = 192 / 128 * 5.5, W = H * aspect;
+  if (W > 60) { W = 60; H = W / aspect; }
+  return { pts: pts.map(([u, v, px]) => ({ u, v, w: Math.max(0, spans.findIndex((s) => px <= s[1] + space / 2)) })), aspect, W, H };
 }
 
 export class Fireworks {
@@ -83,10 +91,10 @@ export class Fireworks {
     scene.add(this.points);
     this.rockets = [];
     this.nextLaunch = 0; this.nextText = 0; this.clock = 0; this.running = false;
-    this.text = null;
+    this.texts = null; this.textIndex = -1;
     // launch sites down on the meadow, out over the grassland from the gallery
     this.sites = [[-52, -26], [-58, -8], [-54, 8], [-62, -18], [-48, -40]].map(([lx, lz]) => { const [x, z] = toWorld(lx, lz); return { x, y: SITE.H0 - 1.4, z }; });
-    const [tx, tz] = toWorld(-64, -10); this.textAt = { x: tx, y: SITE.H0 + 24, z: tz };
+    const [tx, tz] = toWorld(-76, -8); this.textAt = { x: tx, y: SITE.H0 + 26, z: tz };
   }
 
   spawn(x, y, z, vx, vy, vz, col, size, life, kind, drag = 0.985) {
@@ -129,11 +137,12 @@ export class Fireworks {
 
   // the words, laid out in the sky to face the viewer: the sparks fly out from a volley of three bursts to their places
   writeText(cam, onBoom) {
-    if (!this.text) this.text = sampleText();
-    const T = this.textAt, W = 44, H = W / this.text.aspect;
+    if (!this.texts) this.texts = MESSAGES.map(sampleText);
+    this.textIndex = (this.textIndex + 1) % this.texts.length;
+    const text = this.texts[this.textIndex], T = this.textAt, W = text.W, H = text.H;
     let fx = cam.x - T.x, fz = cam.z - T.z; const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
     const rx = fz, rz = -fx;   // the viewer's right (looking from the camera towards the text)
-    for (const q of this.text.pts) {
+    for (const q of text.pts) {
       const ox = (q.u - 0.5) * W, oy = (0.5 - q.v) * H;
       const tx = T.x + rx * ox, ty = T.y + oy, tz = T.z + rz * ox;
       // each spark starts at one of three burst points along the line and flies to its letter
@@ -159,7 +168,7 @@ export class Fireworks {
         this.nextLaunch = volley > 1 ? rand(2.2, 3.2) : rand(0.7, 1.6);
       }
       this.nextText -= dt;
-      if (this.nextText <= 0) { this.writeText(cam, onBoom); this.nextText = 19; }
+      if (this.nextText <= 0) { this.writeText(cam, onBoom); this.nextText = 15; }
     }
     // rockets: up on a trail, then the burst
     for (let k = this.rockets.length - 1; k >= 0; k--) {

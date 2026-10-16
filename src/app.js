@@ -888,7 +888,6 @@ function setClock(mins) {
   sky.material.uniforms.uStars.value = starK;
   fireflyK = THREE.MathUtils.smoothstep(-sunEl, -1, 7);   // the fireflies come out as the sun goes down
   fireworks.active = mins % 1440 === 0;                    // midnight: the fireworks
-  G.setDaylight(dayK);
   sky.material.uniforms.uSunGlow.value.set(useMoon ? '#c8d4ff' : PALETTE.sunGlow);
   // the standing lamps burn from 18:00 to 06:00
   lampK = h >= 12 ? THREE.MathUtils.clamp(h - 17.5, 0, 1) : THREE.MathUtils.clamp(6.5 - h, 0, 1);

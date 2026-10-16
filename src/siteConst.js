@@ -15,7 +15,7 @@ export const SITE = {
   cos: -FLOW.z,            // rotation of the local x axis into world: (cos, -sin)
   sin: -FLOW.x,
   theta: Math.atan2(-FLOW.x, -FLOW.z),   // rotation.y of the gallery group
-  rect: { x0: -9.1, x1: 2.6, z0: -88.5, z1: 43 },    // the platform (local); the back room and its view chamber take the last 18 m
+  rect: { x0: -9.1, x1: 2.6, z0: -80.9, z1: 43 },    // the platform (local); the back room takes the last 10 m
   stair: { x0: -10.9, x1: -7.9, z0: -4.6, z1: -2.0 },  // the ground dips under the steps
   drop: 1.45,              // platform height above the meadow at its rim
   band: 16,                // metres over which the meadow blends back to the natural terrain
